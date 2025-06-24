@@ -104,8 +104,7 @@ class Card:
         self.rect = pygame.Rect(0, 0, CARD_WIDTH, CARD_HEIGHT)
 
     def display(self, screen, left, top):
-        self.rect.x = left
-        self.rect.y = top
+        self.rect = pygame.Rect(left, top, CARD_WIDTH, CARD_HEIGHT)
 
         # Draw card using pygame_cards
         card_image = pygame.transform.scale(
@@ -132,7 +131,6 @@ class GameUI:
         self.selected_cards = []
         self.message = ""
         self.message_timer = 0
-        self.played_cards = []
 
     def draw_background(self):
         self.screen.fill(DARK_GREEN)
@@ -166,46 +164,61 @@ class GameUI:
 
         start_x = 50
         start_y = self.height - CARD_HEIGHT - 50
-        card_spacing = min(60, (self.width - 100) // len(cards))
+        card_spacing = min(50, (self.width - 100) // len(cards))
 
         for i, card in enumerate(cards):
             x = start_x + i * card_spacing
             y = start_y - (20 if card.selected else 0)
             card.display(self.screen, x, y)
 
-    def draw_played_cards(self, cards):
-        if not cards:
+    def draw_played_cards(self, played_cards_history):
+        if not played_cards_history:
             return
 
         center_x = self.width // 2
         center_y = self.height // 2
-        start_x = center_x - (len(cards) * CARD_WIDTH // 2)
-        # Draw previous played cards (if any)
-        if len(self.played_cards) > 0 and self.played_cards != cards:
-            prev_start_x = center_x - \
-                (len(self.played_cards) * CARD_WIDTH // 2)
-            for i, card in enumerate(self.played_cards):
-                # Draw greyed out card
-                card.display(
-                    self.screen,
-                    prev_start_x + i * (CARD_WIDTH + 5),
-                    center_y - CARD_HEIGHT // 2 + 20,
-                )
-                # Overlay a semi-transparent grey rectangle
-                grey_overlay = pygame.Surface(
-                    (CARD_WIDTH, CARD_HEIGHT), pygame.SRCALPHA
-                )
-                grey_overlay.fill((128, 128, 128, 150))
-                self.screen.blit(
-                    grey_overlay,
-                    (
-                        prev_start_x + i * (CARD_WIDTH + 5),
-                        center_y - CARD_HEIGHT // 2 + 20,
-                    ),
-                )
 
-        self.played_cards = cards
-        for i, card in enumerate(cards):
+        # Only show up to the last 5 previous hands in the stack
+        max_stack = 5
+        stack_history = (
+            played_cards_history[-(max_stack + 1): -1]
+            if len(played_cards_history) > 1
+            else []
+        )
+
+        stack_offset = 15  # vertical offset per stack layer
+        total = len(stack_history)
+        for stack_idx, prev_hand in enumerate(stack_history):
+            if prev_hand:
+                prev_start_x = center_x - (len(prev_hand) * CARD_WIDTH // 2)
+                y_offset = (
+                    center_y - CARD_HEIGHT // 2 +
+                    stack_offset * (total - stack_idx)
+                )
+                # Fade older stacks more
+                fade = 80 + int(120 * (stack_idx + 1) / (total + 1))
+                for i, card in enumerate(prev_hand):
+                    card.display(
+                        self.screen,
+                        prev_start_x + i * (CARD_WIDTH + 5),
+                        y_offset,
+                    )
+                    grey_overlay = pygame.Surface(
+                        (CARD_WIDTH, CARD_HEIGHT), pygame.SRCALPHA
+                    )
+                    grey_overlay.fill((128, 128, 128, fade))
+                    self.screen.blit(
+                        grey_overlay,
+                        (
+                            prev_start_x + i * (CARD_WIDTH + 5),
+                            y_offset,
+                        ),
+                    )
+
+        # Draw current played cards (most recent hand) on top
+        current_cards = played_cards_history[-1]
+        start_x = center_x - (len(current_cards) * CARD_WIDTH // 2)
+        for i, card in enumerate(current_cards):
             card.display(
                 self.screen, start_x + i *
                 (CARD_WIDTH + 5), center_y - CARD_HEIGHT // 2
@@ -234,7 +247,7 @@ class GameUI:
         self.message_timer = duration
 
     def handle_card_click(self, pos, cards):
-        for card in cards:
+        for card in reversed(cards):
             if card.rect.collidepoint(pos):
                 card.selected = not card.selected
                 if card.selected:
@@ -382,7 +395,9 @@ def game():
     # Initialize game
     deal(players)
     current_player = who_starts(players)
-    played_cards = []
+    played_cards = []  # Current cards on table
+    played_cards_history = []  # History of all played hands
+    players_passed = set()  # Track who has passed this round
 
     # Error messages
     error_messages = {
@@ -420,8 +435,16 @@ def game():
                                 for card in selected_cards:
                                     current_player.hand.remove(card)
                                     card.selected = False
+                                    card.selected_by = (
+                                        current_player.name
+                                    )  # Track who played the card
                                 played_cards = selected_cards
+                                played_cards_history.append(
+                                    selected_cards.copy())
                                 ui.selected_cards.clear()
+                                players_passed.discard(
+                                    current_player
+                                )  # Remove from passed set
 
                                 if len(current_player.hand) == 0:
                                     ui.show_message(
@@ -430,6 +453,7 @@ def game():
                                 else:
                                     current_player = current_player.next_player(
                                         players)
+                                    players_passed.clear()  # Reset passed players after a play
                             else:
                                 # Invalid play
                                 if result in error_messages:
@@ -443,18 +467,28 @@ def game():
                         for card in ui.selected_cards:
                             card.selected = False
                         ui.selected_cards.clear()
+                        players_passed.add(current_player)
                         current_player = current_player.next_player(players)
 
                         # Check if all other players passed - winner can play anything
-                        passed_players = 0
-                        temp_player = current_player
-                        for _ in range(len(players) - 1):
-                            temp_player = temp_player.next_player(players)
-                            if temp_player != current_player:
-                                passed_players += 1
-
-                        if passed_players == len(players) - 1:
+                        if len(players_passed) >= len(players) - 1:
+                            # The last player who played (the winner) should open the next turn
+                            if played_cards_history:
+                                current_player = (
+                                    players[
+                                        [p.name for p in players].index(
+                                            played_cards_history[-1][0].selected_by
+                                        )
+                                    ]
+                                    if hasattr(
+                                        played_cards_history[-1][0], "selected_by"
+                                    )
+                                    else current_player
+                                )
                             played_cards = []  # Reset to allow any combination
+                            played_cards_history.clear()  # Clear history for new round
+                            players_passed.clear()
+                            ui.show_message("New round! Play any combination.")
                     else:
                         # Handle card selection
                         ui.handle_card_click(event.pos, current_player.hand)
@@ -474,26 +508,46 @@ def game():
                 if play([card], current_player.hand, played_cards) == 0:
                     current_player.hand.remove(card)
                     played_cards = [card]
+                    for c in played_cards:
+                        c.selected_by = current_player.name  # Track who played the card
+                    played_cards_history.append([card])
+                    # Remove from passed set
+                    players_passed.discard(current_player)
                     played = True
                     break
 
             if not played:
-                # AI passes - check if all others passed
-                current_player = current_player.next_player(players)
-                # If everyone else passed, reset played_cards
-                if len(played_cards) > 0:
-                    played_cards = []
+                # AI passes
+                players_passed.add(current_player)
 
+            # Check if AI won
             if len(current_player.hand) == 0:
                 ui.show_message(f"{current_player.name} wins!")
                 running = False
             else:
                 current_player = current_player.next_player(players)
 
+            # Check if all players passed except one
+            if len(players_passed) >= len(players) - 1:
+                played_cards = []  # Reset to allow any combination
+                # Set current_player to the last who played
+                if played_cards_history:
+                    current_player = (
+                        players[
+                            [p.name for p in players].index(
+                                played_cards_history[-1][0].selected_by
+                            )
+                        ]
+                        if hasattr(played_cards_history[-1][0], "selected_by")
+                        else current_player
+                    )
+                played_cards_history.clear()  # Clear history for new round
+                players_passed.clear()
+
         # Draw everything
         ui.draw_background()
         ui.draw_player_info(current_player, players)
-        ui.draw_played_cards(played_cards)
+        ui.draw_played_cards(played_cards_history)
 
         if current_player.name == "Player":
             ui.draw_cards_in_hand(current_player.hand)
