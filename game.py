@@ -468,6 +468,7 @@ def game():
                             card.selected = False
                         ui.selected_cards.clear()
                         players_passed.add(current_player)
+                        ui.show_message(f"{current_player.name} passed.")
                         current_player = current_player.next_player(players)
 
                         # Check if all other players passed - winner can play anything
@@ -485,10 +486,13 @@ def game():
                                     )
                                     else current_player
                                 )
+                                # Skip players who have passed until a new play is made
+                                while current_player in players_passed:
+                                    current_player = current_player.next_player(
+                                        players)
                             played_cards = []  # Reset to allow any combination
                             played_cards_history.clear()  # Clear history for new round
                             players_passed.clear()
-                            ui.show_message("New round! Play any combination.")
                     else:
                         # Handle card selection
                         ui.handle_card_click(event.pos, current_player.hand)
@@ -519,12 +523,17 @@ def game():
             if not played:
                 # AI passes
                 players_passed.add(current_player)
+                ui.show_message(f"{current_player.name} passed.")
 
             # Check if AI won
             if len(current_player.hand) == 0:
                 ui.show_message(f"{current_player.name} wins!")
                 running = False
             else:
+                current_player = current_player.next_player(players)
+
+            # Skip players who have passed until a new play is made
+            while current_player in players_passed:
                 current_player = current_player.next_player(players)
 
             # Check if all players passed except one
