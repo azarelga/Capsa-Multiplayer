@@ -1,0 +1,15 @@
+[Unit]
+Description=Capsa TCP Game Server
+After=network.target
+
+[Service]
+User=azureuser                 # Keep this line
+WorkingDirectory=/home/azureuser/Capsa-Multiplayer/
+ExecStart=/bin/bash -c "/home/azureuser/Capsa-Multiplayer/venv/bin/python3 /home/azureuser/Capsa-Multiplayer/server_process_tcp.py"
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

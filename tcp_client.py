@@ -179,7 +179,7 @@ class CapsaClient:
             'winner': None,
             'players_passed': []
         }
-        self.server_address = ('localhost', 55556)
+        self.server_address = ('57.155.178.71', 55556) #IP LoadBalancer
         self.selected_cards = []
         self.message = ""
         self.message_timer = 0
