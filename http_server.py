@@ -567,7 +567,7 @@ class CapsaHTTPHandler(BaseHTTPRequestHandler):
 def cleanup_thread():
     while game_server.running:
         game_server.cleanup_inactive_clients()
-        time.sleep(30)
+        time.sleep(10)
 
 def main():
     logging.basicConfig(

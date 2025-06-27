@@ -216,12 +216,12 @@ class CapsaHTTPClient:
                         if 'command' in data and data['command'] == 'GAME_UPDATE':
                             self.game_data.update(data)
                 
-                time.sleep(0.1)
+                time.sleep(0.001)
                 
             except Exception as e:
                 if self.connected:
                     logging.warning(f"Update error: {e}")
-                time.sleep(0.5)
+                time.sleep(0.05)
     
     def send_command(self, command):
         if not self.connected:
