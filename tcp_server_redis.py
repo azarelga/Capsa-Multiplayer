@@ -8,7 +8,7 @@ import json
 import logging
 import redis
 
-from game_server import CapsaGameServer, GameSession, CapsaGameState
+from server import CapsaGameServer, GameSession, CapsaGameState
 from game import deal, who_starts
 
 REDIS_HOST = 'capsagamecache.redis.cache.windows.net'
