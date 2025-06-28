@@ -108,6 +108,7 @@ class CapsaGameServer:
         for sid in active_session_ids:
             session_data = redis_client.hgetall(f"session:{sid}")
             if session_data:
+                session_data['session_id'] = sid
                 session_data['player_count'] = int(session_data.get('player_count', '0'))
                 sessions_list.append(session_data)
             else:
@@ -171,6 +172,7 @@ class CapsaGameServer:
                 "created_at": session.created_at.isoformat(),
                 "player_count": 1,
                 "status": "waiting",
+                "players_names_json": json.dumps([creator_name, "", "", ""]),
                 "game_state_json": json.dumps(self._get_initial_game_state_json())
             }
             redis_client.hmset(f"session:{session_id}", session_data)
@@ -204,7 +206,7 @@ class CapsaGameServer:
     # In CapsaGameServer class
     def join_session(self, client_id, session_id, player_name):
         with self.lock:
-            if session_id not in redis_client.sismember("active_sessions", session_id):
+            if not redis_client.sismember("active_sessions", session_id):
                 self.send_to_client(client_id, {
                     'command': 'ERROR',
                     'message': 'Session not found or no longer active'
@@ -366,31 +368,17 @@ class CapsaGameServer:
                 return
 
             client_info = self.clients.get(client_id)
-            if not client_info:
-                return
-
-            player_index = client_info["player_index"]
-
-            # Check if player has already passed in this round (check this FIRST)
-            if player_index in session.game_state.round_passes:
-                print(f"Player {player_index} tried to play after passing, sending error")
-                self.send_to_client(
-                    client_id, 
-                    {
-                        "command": "ERROR", 
-                        "message": "You cannot play cards after passing. Wait for the next round."
-                    }
-                )
-                return
+            player_index = client_info['player_index']
 
             if player_index != session.game_state.current_player_index:
-                self.send_to_client(
-                    client_id, {"command": "ERROR", "message": "Not your turn!"}
-                )
+                self.send_to_client(client_id, {
+                    'command': 'ERROR',
+                    'message': 'Not your turn!'
+                })
                 return
 
             current_player = session.game_state.players[player_index]
-
+            
             selected_cards = []
             for card_num in card_numbers:
                 for card in current_player.hand:
@@ -399,16 +387,15 @@ class CapsaGameServer:
                         break
 
             if len(selected_cards) != len(card_numbers):
-                self.send_to_client(
-                    client_id, {"command": "ERROR", "message": "Invalid cards selected"}
-                )
+                self.send_to_client(client_id, {
+                    'command': 'ERROR',
+                    'message': 'Invalid cards selected'
+                })
                 return
 
             selected_cards.sort(key=lambda card: card.number)
-
-            result = play(
-                selected_cards, current_player.hand, session.game_state.played_cards
-            )
+            
+            result = play(selected_cards, current_player.hand, session.game_state.played_cards)
 
             if result == 0:
                 for card in selected_cards:
@@ -418,9 +405,9 @@ class CapsaGameServer:
 
                 session.game_state.played_cards = selected_cards
                 session.game_state.played_cards_history.append(selected_cards.copy())
-
-                # DON'T clear round passes here - only clear when 3 players have passed
-                print(f"Player {player_index} played cards - round continues")
+                
+                # Clear round passes when someone plays (new round starts)
+                session.game_state.round_passes.clear()
 
                 if len(current_player.hand) == 0:
                     self.end_game(session, current_player.name)
@@ -439,16 +426,13 @@ class CapsaGameServer:
                     7: "Invalid hand, try again!",
                     8: "You need to play a stronger hand!",
                     9: "You need to play a higher suit!",
-                    10: "You need to play a better hand!",
+                    10: "You need to play a better hand!"
                 }
 
-                self.send_to_client(
-                    client_id,
-                    {
-                        "command": "ERROR",
-                        "message": error_messages.get(result, "Invalid play"),
-                    },
-                )
+                self.send_to_client(client_id, {
+                    'command': 'ERROR',
+                    'message': error_messages.get(result, 'Invalid play')
+                })
 
     def handle_pass_turn(self, client_id):
         session = self.get_session(client_id)
@@ -470,29 +454,10 @@ class CapsaGameServer:
 
             # Check if 3 players passed in this round (only 1 left)
             if len(session.game_state.round_passes) >= 3:
-                # Clear the table and start new round with last player who played
+                # Clear the table and start new round
                 session.game_state.played_cards = []
                 session.game_state.played_cards_history.clear()
                 session.game_state.round_passes.clear()
-                
-                # Set the last player who played as the current player for new round
-                if session.game_state.last_player_to_play is not None:
-                    session.game_state.current_player_index = session.game_state.last_player_to_play
-                    print(f"New round starting with Player {session.game_state.last_player_to_play} (last to play)")
-                    self.broadcast_game_state_to_session(session.session_id)
-                    
-                    # Check if the new current player is an AI and needs automated turn
-                    current_player_id = None
-                    for client_id, info in session.clients.items():
-                        if info['player_index'] == session.game_state.current_player_index:
-                            current_player_id = client_id
-                            break
-                    
-                    if current_player_id is None:
-                        # It's an AI player, schedule their turn
-                        threading.Timer(2.0, lambda: self.handle_ai_turn(session)).start()
-                    
-                    return
 
             self.next_turn(session)
 
@@ -528,72 +493,33 @@ class CapsaGameServer:
             if not current_player.hand:
                 return
 
-            print(f"🤖 AI TURN: Player {player_index} ({current_player.name})")
-            print(f"📋 Current round passes: {sorted(list(session.game_state.round_passes))}")
-
             played = False
             for card in current_player.hand:
-                if (
-                    play([card], current_player.hand, session.game_state.played_cards)
-                    == 0
-                ):
+                if play([card], current_player.hand, session.game_state.played_cards) == 0:
                     current_player.hand.remove(card)
                     session.game_state.played_cards = [card]
                     for c in session.game_state.played_cards:
                         c.selected_by = current_player.name
                     session.game_state.played_cards_history.append([card])
-                    session.game_state.last_player_to_play = player_index  # Track AI play
-
-                    # DON'T clear round passes when AI plays - only when 3 players pass
+                    
+                    # Clear round passes when AI plays (new round starts)
+                    session.game_state.round_passes.clear()
                     played = True
-                    print(f"✅ AI {current_player.name} played card {card.number}")
                     break
 
             if not played:
                 # AI passes this round
                 session.game_state.round_passes.add(player_index)
-                print(f"❌ AI {current_player.name} passed")
-                
-                # Print detailed pass information for AI
-                passed_names = []
-                for passed_idx in session.game_state.round_passes:
-                    passed_names.append(f"{passed_idx}({session.game_state.players[passed_idx].name})")
-                print(f"👥 Players who have passed: {', '.join(passed_names)}")
-                print(f"🔢 Total passes this round: {len(session.game_state.round_passes)}/3")
-                
-                # Check if 3 players passed in this round
+
                 if len(session.game_state.round_passes) >= 3:
-                    # Clear the table and start new round with last player who played
                     session.game_state.played_cards = []
                     session.game_state.played_cards_history.clear()
                     session.game_state.round_passes.clear()
-                    
-                    # Set the last player who played as the current player for new round
-                    if session.game_state.last_player_to_play is not None:
-                        session.game_state.current_player_index = session.game_state.last_player_to_play
-                        print(f"New round starting with Player {session.game_state.last_player_to_play} (last to play)")
-                        
-                        # Broadcast the new game state and check if it's AI's turn
-                        self.broadcast_game_state_to_session(session.session_id)
-                        
-                        # Check if the new current player is also an AI
-                        current_player_id = None
-                        for client_id, info in session.clients.items():
-                            if info['player_index'] == session.game_state.current_player_index:
-                                current_player_id = client_id
-                                break
-                        
-                        if current_player_id is None:
-                            threading.Timer(2.0, lambda: self.handle_ai_turn(session)).start()
-                        
-                        return  # Don't call next_turn() - we've already set the correct player
 
-            # Check for game end
             if len(current_player.hand) == 0:
                 self.end_game(session, current_player.name)
                 return
 
-            # Only call next_turn if we didn't start a new round
             self.next_turn(session)
 
     def start_new_game(self, client_id):
@@ -786,49 +712,74 @@ class CapsaGameServer:
 
     # In CapsaGameServer class
     def broadcast_game_state_to_session(self, session_id):
-        session_data_from_redis = redis_client.hgetall(f"session:{session_id}")
-        if not session_data_from_redis:
-            logging.warning(f"Session {session_id} not found in Redis during broadcast.")
-            return
+        try:
+            session_data_from_redis = redis_client.hgetall(f"session:{session_id}")
+            if not session_data_from_redis:
+                logging.warning(f"Session {session_id} not found in Redis during broadcast.")
+                return
 
-        session = self.sessions.get(session_id)
-        if not session:
-             logging.warning(f"Attempted to broadcast for session {session_id} not locally managed by this VM.")
-             return
+            session = self.sessions.get(session_id)
+            if not session:
+                 logging.warning(f"Attempted to broadcast for session {session_id} not locally managed by this VM.")
+                 return
 
-        global_players_names = json.loads(session_data_from_redis.get('players_names_json', '["", "", "", ""]'))
-        global_player_count = int(session_data_from_redis.get('player_count', 0))
+            # Safely get players_names_json with fallback
+            players_names_json = session_data_from_redis.get('players_names_json', '["", "", "", ""]')
+            try:
+                global_players_names = json.loads(players_names_json)
+            except (json.JSONDecodeError, TypeError):
+                global_players_names = ["", "", "", ""]
+                
+            global_player_count = int(session_data_from_redis.get('player_count', 0))
 
-        for i in range(4):
-            session.game_state.players_names[i] = global_players_names[i]
+            for i in range(4):
+                session.game_state.players_names[i] = global_players_names[i]
 
-        hands_data = {}
-        for client_id, client_info in session.clients.items():
-            player_index = client_info['player_index']
-            hands_data[client_id] = [self.card_to_dict(card) for card in session.game_state.players[player_index].hand]
+            hands_data = {}
+            for client_id, client_info in session.clients.items():
+                player_index = client_info['player_index']
+                if 0 <= player_index < len(session.game_state.players):
+                    hands_data[client_id] = [self.card_to_dict(card) for card in session.game_state.players[player_index].hand]
+                else:
+                    hands_data[client_id] = []
 
-        played_cards_data = [self.card_to_dict(card) for card in session.game_state.played_cards]
+            played_cards_data = [self.card_to_dict(card) for card in session.game_state.played_cards]
 
-        for client_id, client_info in session.clients.items():
-            state_msg = {
-                'command': 'GAME_UPDATE',
-                'session_id': session_id,
-                'session_name': session_data_from_redis.get('session_name'),
-                'current_player_index': session.game_state.current_player_index,
-                'current_player_name': session.game_state.players[session.game_state.current_player_index].name,
-                'players_names': global_players_names,
-                'my_hand': hands_data[client_id],
-                'my_player_index': client_info['player_index'],
-                'played_cards': played_cards_data,
-                'players_card_counts': [len(p.hand) for p in session.game_state.players],
-                'game_active': session.game_state.game_active,
-                'winner': session.game_state.winner,
-                'players_passed': list(session.game_state.round_passes)
-            }
-            self.send_to_client(client_id, state_msg)
+            for client_id, client_info in session.clients.items():
+                # Safely get current player name
+                current_player_name = ""
+                if (0 <= session.game_state.current_player_index < len(session.game_state.players) and 
+                    session.game_state.players[session.game_state.current_player_index]):
+                    current_player_name = session.game_state.players[session.game_state.current_player_index].name
+                
+                state_msg = {
+                    'command': 'GAME_UPDATE',
+                    'session_id': session_id,
+                    'session_name': session_data_from_redis.get('session_name', 'Unknown Session'),
+                    'current_player_index': session.game_state.current_player_index,
+                    'current_player_name': current_player_name,
+                    'players_names': global_players_names,
+                    'my_hand': hands_data[client_id],
+                    'my_player_index': client_info['player_index'],
+                    'played_cards': played_cards_data,
+                    'players_card_counts': [len(p.hand) for p in session.game_state.players],
+                    'game_active': session.game_state.game_active,
+                    'winner': session.game_state.winner,
+                    'players_passed': list(session.game_state.round_passes)
+                }
+                self.send_to_client(client_id, state_msg)
 
-        current_player_name = session.game_state.players[session.game_state.current_player_index].name
-        print(f"Broadcasting game state to session '{session.session_name}' - Current player: {current_player_name}")
+            current_player_name = ""
+            if (0 <= session.game_state.current_player_index < len(session.game_state.players) and 
+                session.game_state.players[session.game_state.current_player_index]):
+                current_player_name = session.game_state.players[session.game_state.current_player_index].name
+                
+            print(f"Broadcasting game state to session '{session.session_name}' - Current player: {current_player_name}")
+            
+        except Exception as e:
+            logging.error(f"Error in broadcast_game_state_to_session for session {session_id}: {e}")
+            import traceback
+            traceback.print_exc()
 
     def card_to_dict(self, card):
         return {
@@ -838,3 +789,90 @@ class CapsaGameServer:
             'pp_value': card.pp_value,
             'selected': getattr(card, 'selected', False)
         }
+
+class HttpServer:
+    def __init__(self):
+        self.sessions = {}
+        self.types = {}
+
+    def response(self, kode=404, message="Not Found", messagebody=bytes(), headers={}):
+        tanggal = datetime.now().strftime("%c")
+        resp = []
+        resp.append("HTTP/1.0 {} {}\r\n".format(kode, message))
+        resp.append("Date: {}\r\n".format(tanggal))
+        resp.append("Connection: close\r\n")
+        resp.append("Server: myserver/1.0\r\n")
+        resp.append("Content-Length: {}\r\n".format(len(messagebody)))
+        for kk in headers:
+            resp.append("{}:{}\r\n".format(kk, headers[kk]))
+        resp.append("\r\n")
+
+        response_headers = ""
+        for i in resp:
+            response_headers = "{}{}".format(response_headers, i)
+        
+        if type(messagebody) is not bytes:
+            messagebody = messagebody.encode()
+
+        response = response_headers.encode() + messagebody
+        return response
+
+    def proses(self, data):
+        requests = data.split("\r\n")
+        baris = requests[0]
+        all_headers = [n for n in requests[1:] if n != ""]
+
+        j = baris.split(" ")
+        try:
+            method = j[0].upper().strip()
+            if method == "GET":
+                object_address = j[1].strip()
+                return self.http_get(object_address, all_headers)
+            if method == "POST":
+                object_address = j[1].strip()
+                return self.http_post(object_address, all_headers)
+            else:
+                return self.response(400, "Bad Request", "", {})
+        except IndexError:
+            return self.response(400, "Bad Request", "", {})
+
+    def http_get(self, object_address, headers):
+        files = glob("./*")
+        thedir = "./"
+        if object_address == "/":
+            return self.response(200, "OK", "Ini Adalah web Server percobaan", dict())
+
+        if object_address == "/video":
+            return self.response(
+                302, "Found", "", dict(location="https://youtu.be/katoxpnTf04")
+            )
+        if object_address == "/santai":
+            return self.response(200, "OK", "santai saja", dict())
+
+        object_address = object_address[1:]
+        if thedir + object_address not in files:
+            return self.response(404, "Not Found", "", {})
+        fp = open(thedir + object_address, "rb")
+        isi = fp.read()
+
+        fext = os.path.splitext(thedir + object_address)[1]
+        content_type = self.types[fext]
+
+        headers = {}
+        headers["Content-type"] = content_type
+
+        return self.response(200, "OK", isi, headers)
+
+    def http_post(self, object_address, headers):
+        headers = {}
+        isi = "kosong"
+        return self.response(200, "OK", isi, headers)
+
+
+if __name__ == "__main__":
+    httpserver = HttpServer()
+    d = httpserver.proses("GET testing.txt HTTP/1.0")
+    print(d)
+    d = httpserver.proses("GET donalbebek.jpg HTTP/1.0")
+    print(d)
+    
