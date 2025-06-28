@@ -7,13 +7,13 @@ import logging
 import time
 import math
 
+
 # Import dari game.py untuk konsistensi
 from game import (
     CARD_WIDTH, CARD_HEIGHT, WHITE, BLACK, RED, GREEN, BLUE, DARK_GREEN, 
     LIGHT_BLUE, GREY, LIGHT_GREY,
     card_sets
 )
-
 def show_session_menu():
     print("\n" + "="*50)
     print("CAPSA MULTIPLAYER - SESSION SELECTION")
@@ -179,7 +179,8 @@ class CapsaClient:
             'winner': None,
             'players_passed': []
         }
-        self.server_address = ('57.155.178.71', 55556) #IP LoadBalancer
+        self.server_address = ('localhost', 55556) #IP LoadBalancer
+        # self.server_address = ('57.155.178.71', 55556) #IP LoadBalancer
         self.selected_cards = []
         self.message = ""
         self.message_timer = 0

@@ -20,7 +20,7 @@ from game import (
 
 REDIS_HOST = 'capsagamecache.redis.cache.windows.net'
 REDIS_PORT = 6380 # 6380 for SSL/TLS, 6379 for non-SSL
-REDIS_PASSWORD = 'UG7gX2plA0IUVi2OT5nnKiNYOJ8IiVkPJAzCaIIqC8s='
+REDIS_PASSWORD = 'REDIS_KEYS'
 REDIS_DB = 0 # Default Redis database
 
 try:
