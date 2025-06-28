@@ -20,7 +20,7 @@ from game import (
 
 REDIS_HOST = 'capsagamecache.redis.cache.windows.net'
 REDIS_PORT = 6380 # 6380 for SSL/TLS, 6379 for non-SSL
-REDIS_PASSWORD = ''
+REDIS_PASSWORD = 'UG7gX2plA0IUVi2OT5nnKiNYOJ8IiVkPJAzCaIIqC8s='
 REDIS_DB = 0 # Default Redis database
 
 try:
@@ -108,6 +108,7 @@ class CapsaGameServer:
         for sid in active_session_ids:
             session_data = redis_client.hgetall(f"session:{sid}")
             if session_data:
+                session_data['session_id'] = sid
                 session_data['player_count'] = int(session_data.get('player_count', '0'))
                 sessions_list.append(session_data)
             else:
@@ -204,7 +205,7 @@ class CapsaGameServer:
     # In CapsaGameServer class
     def join_session(self, client_id, session_id, player_name):
         with self.lock:
-            if session_id not in redis_client.sismember("active_sessions", session_id):
+            if not redis_client.sismember("active_sessions", session_id):
                 self.send_to_client(client_id, {
                     'command': 'ERROR',
                     'message': 'Session not found or no longer active'
