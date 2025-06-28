@@ -470,10 +470,29 @@ class CapsaGameServer:
 
             # Check if 3 players passed in this round (only 1 left)
             if len(session.game_state.round_passes) >= 3:
-                # Clear the table and start new round
+                # Clear the table and start new round with last player who played
                 session.game_state.played_cards = []
                 session.game_state.played_cards_history.clear()
                 session.game_state.round_passes.clear()
+                
+                # Set the last player who played as the current player for new round
+                if session.game_state.last_player_to_play is not None:
+                    session.game_state.current_player_index = session.game_state.last_player_to_play
+                    print(f"New round starting with Player {session.game_state.last_player_to_play} (last to play)")
+                    self.broadcast_game_state_to_session(session.session_id)
+                    
+                    # Check if the new current player is an AI and needs automated turn
+                    current_player_id = None
+                    for client_id, info in session.clients.items():
+                        if info['player_index'] == session.game_state.current_player_index:
+                            current_player_id = client_id
+                            break
+                    
+                    if current_player_id is None:
+                        # It's an AI player, schedule their turn
+                        threading.Timer(2.0, lambda: self.handle_ai_turn(session)).start()
+                    
+                    return
 
             self.next_turn(session)
 
@@ -523,6 +542,7 @@ class CapsaGameServer:
                     for c in session.game_state.played_cards:
                         c.selected_by = current_player.name
                     session.game_state.played_cards_history.append([card])
+                    session.game_state.last_player_to_play = player_index  # Track AI play
 
                     # DON'T clear round passes when AI plays - only when 3 players pass
                     played = True
@@ -540,12 +560,40 @@ class CapsaGameServer:
                     passed_names.append(f"{passed_idx}({session.game_state.players[passed_idx].name})")
                 print(f"👥 Players who have passed: {', '.join(passed_names)}")
                 print(f"🔢 Total passes this round: {len(session.game_state.round_passes)}/3")
+                
+                # Check if 3 players passed in this round
+                if len(session.game_state.round_passes) >= 3:
+                    # Clear the table and start new round with last player who played
+                    session.game_state.played_cards = []
+                    session.game_state.played_cards_history.clear()
+                    session.game_state.round_passes.clear()
+                    
+                    # Set the last player who played as the current player for new round
+                    if session.game_state.last_player_to_play is not None:
+                        session.game_state.current_player_index = session.game_state.last_player_to_play
+                        print(f"New round starting with Player {session.game_state.last_player_to_play} (last to play)")
+                        
+                        # Broadcast the new game state and check if it's AI's turn
+                        self.broadcast_game_state_to_session(session.session_id)
+                        
+                        # Check if the new current player is also an AI
+                        current_player_id = None
+                        for client_id, info in session.clients.items():
+                            if info['player_index'] == session.game_state.current_player_index:
+                                current_player_id = client_id
+                                break
+                        
+                        if current_player_id is None:
+                            threading.Timer(2.0, lambda: self.handle_ai_turn(session)).start()
+                        
+                        return  # Don't call next_turn() - we've already set the correct player
 
-            # Always move to next turn 
+            # Check for game end
             if len(current_player.hand) == 0:
                 self.end_game(session, current_player.name)
                 return
 
+            # Only call next_turn if we didn't start a new round
             self.next_turn(session)
 
     def start_new_game(self, client_id):

@@ -380,10 +380,10 @@ def draw_game(screen, client, WIDTH, HEIGHT):
             # Better color highlighting
             if i == client.game_data['current_player_index']:
                 color = HIGHLIGHT_COLOR  # Bright yellow for current player
-                prefix = "► "
+                prefix = "> "
             elif i == client.player_index:
                 color = SELECTED_COLOR  # Cyan for yourself
-                prefix = "● "
+                prefix = "* "
             else:
                 color = WHITE
                 prefix = "  "

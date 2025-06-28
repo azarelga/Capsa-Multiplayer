@@ -387,6 +387,18 @@ class CapsaGameServer:
                     session.game_state.current_player_index = session.game_state.last_player_to_play
                     print(f"New round starting with Player {session.game_state.last_player_to_play} (last to play)")
                     self.broadcast_game_state_to_session(session.session_id)
+                    
+                    # Check if the new current player is an AI and needs automated turn
+                    current_player_id = None
+                    for client_id, info in session.clients.items():
+                        if info['player_index'] == session.game_state.current_player_index:
+                            current_player_id = client_id
+                            break
+                    
+                    if current_player_id is None:
+                        # It's an AI player, schedule their turn
+                        threading.Timer(2.0, lambda: self.handle_ai_turn(session)).start()
+                    
                     return
 
             self.next_turn(session)
