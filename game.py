@@ -34,6 +34,7 @@ unordered_set = [
 ]
 card_sets = [card for group in unordered_set for card in group]
 
+
 class GameState(Enum):
     MENU = 1
     PLAYING = 2
@@ -56,6 +57,7 @@ class Player:
 
     def next_player(self, people):
         return people[(people.index(self) + 1) % len(people)]
+
 
 class Card:
     def __init__(self, number):
@@ -93,16 +95,17 @@ class Card:
 
         # Highlight if selected
         if self.selected:
-            pygame.draw.rect(screen, LIGHT_BLUE, self.rect, 5)  
+            pygame.draw.rect(screen, LIGHT_BLUE, self.rect, 5)
+
 
 class CapsaClientCard:
     def __init__(self, card_data):
-        self.number = card_data['number']
-        self.suit = card_data['suit']
-        self.value = card_data['value']
-        self.pp_value = card_data['pp_value']
-        self.selected = card_data.get('selected', False)
-        
+        self.number = card_data["number"]
+        self.suit = card_data["suit"]
+        self.value = card_data["value"]
+        self.pp_value = card_data["pp_value"]
+        self.selected = card_data.get("selected", False)
+
         try:
             # Test if card_sets is available from game.py import
             test_card = card_sets[0] if card_sets else None
@@ -115,7 +118,7 @@ class CapsaClientCard:
         if PYGAME_CARDS_AVAILABLE:
             big2_value = (self.value + 1) % 13
             self.pygame_card = card_sets[big2_value + 13 * self.suit]
-        
+
         self.rect = pygame.Rect(0, 0, CARD_WIDTH, CARD_HEIGHT)
 
     def display(self, screen, left, top, selected=False):
@@ -130,18 +133,20 @@ class CapsaClientCard:
             # Fallback simple drawing
             pygame.draw.rect(screen, WHITE, self.rect)
             pygame.draw.rect(screen, BLACK, self.rect, 2)
-            
+
             # Draw suit and value
-            suits = ['♦', '♣', '♥', '♠']
+            suits = ["♦", "♣", "♥", "♠"]
             suit_colors = [RED, BLACK, RED, BLACK]
-            
+
             font = pygame.font.Font(None, 24)
             text = font.render(f"{self.pp_value}", True, suit_colors[self.suit])
             screen.blit(text, (left + 5, top + 5))
-            
+
             suit_font = pygame.font.Font(None, 36)
             suit_text = suit_font.render(suits[self.suit], True, suit_colors[self.suit])
-            screen.blit(suit_text, (left + CARD_WIDTH//2 - 10, top + CARD_HEIGHT//2 - 15))
+            screen.blit(
+                suit_text, (left + CARD_WIDTH // 2 - 10, top + CARD_HEIGHT // 2 - 15)
+            )
 
         # Better highlight for selected cards
         if selected:
@@ -152,6 +157,7 @@ class CapsaClientCard:
             pygame.draw.rect(screen, HIGHLIGHT_COLOR, glow_rect, 3)
 
         return self.rect
+
 
 def show_session_menu():
     print("\n" + "=" * 50)
@@ -240,6 +246,7 @@ def show_sessions_list(sessions):
             print("\nGoodbye!")
             sys.exit(0)
 
+
 def init_pygame():
     pygame.init()
 
@@ -251,6 +258,7 @@ def init_pygame():
     FPS = 60
 
     return screen, clock, WIDTH, HEIGHT, FPS
+
 
 def deal(some_players):
     n = len(some_players)
@@ -373,58 +381,65 @@ def play(some_cards, hand, cards):
         else:
             return 2
 
+
 def draw_game(screen, client, WIDTH, HEIGHT):
     screen.fill(DARK_GREEN)
-    
+
     # Draw table background seperti di game.py
-    table_rect = pygame.Rect(
-        WIDTH // 6, HEIGHT // 4, 2 * WIDTH // 3, HEIGHT // 2
-    )
+    table_rect = pygame.Rect(WIDTH // 6, HEIGHT // 4, 2 * WIDTH // 3, HEIGHT // 2)
     pygame.draw.ellipse(screen, GREEN, table_rect)
     pygame.draw.ellipse(screen, BLACK, table_rect, 3)
-    
+
     font_large = pygame.font.Font(None, 36)
     font_medium = pygame.font.Font(None, 24)
     font_small = pygame.font.Font(None, 20)
-    
+
     if not client.connected:
         error_text = font_large.render("DISCONNECTED", True, RED)
-        screen.blit(error_text, (WIDTH//2 - 100, HEIGHT//2))
+        screen.blit(error_text, (WIDTH // 2 - 100, HEIGHT // 2))
         return [], []
-    
+
     # Title with session info
     title = font_large.render(f"CAPSA MULTIPLAYER - {client.session_name}", True, WHITE)
-    screen.blit(title, (WIDTH//2 - title.get_width()//2, 10))
-    
+    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 10))
+
     # Player info with custom names
     if client.player_name:
-        player_text = font_medium.render(f"You: {client.player_name}", True, SELECTED_COLOR)
+        player_text = font_medium.render(
+            f"You: {client.player_name}", True, SELECTED_COLOR
+        )
         screen.blit(player_text, (10, 50))
-    
+
     # Current player with custom names
-    current_text = font_medium.render(f"Turn: {client.game_data['current_player_name']}", True, WHITE)
+    current_text = font_medium.render(
+        f"Turn: {client.game_data['current_player_name']}", True, WHITE
+    )
     screen.blit(current_text, (10, 80))
-    
+
     # Players info with custom names and better formatting
     y_pos = 120
     title_players = font_medium.render("Players:", True, WHITE)
     screen.blit(title_players, (10, y_pos))
     y_pos += 30
-    
+
     # Get list of players who passed this round
-    players_passed = client.game_data.get('players_passed', [])
-    
-    for i, name in enumerate(client.game_data['players_names']):
+    players_passed = client.game_data.get("players_passed", [])
+
+    for i, name in enumerate(client.game_data["players_names"]):
         if name:
-            count = client.game_data['players_card_counts'][i] if i < len(client.game_data['players_card_counts']) else 0
-            
+            count = (
+                client.game_data["players_card_counts"][i]
+                if i < len(client.game_data["players_card_counts"])
+                else 0
+            )
+
             # Determine color and prefix based on player status
             if i in players_passed:
                 # Player has passed - show in grey/dim color
                 color = GREY
                 prefix = "X "  # X to indicate passed
                 status_suffix = " (PASSED)"
-            elif i == client.game_data['current_player_index']:
+            elif i == client.game_data["current_player_index"]:
                 color = HIGHLIGHT_COLOR  # Bright yellow for current player
                 prefix = "> "
                 status_suffix = ""
@@ -436,97 +451,109 @@ def draw_game(screen, client, WIDTH, HEIGHT):
                 color = WHITE
                 prefix = "  "
                 status_suffix = ""
-            
+
             # Show slot number, custom name, and pass status
-            text = font_small.render(f"{prefix}Slot {i+1}: {name} ({count} cards){status_suffix}", True, color)
+            text = font_small.render(
+                f"{prefix}Slot {i + 1}: {name} ({count} cards){status_suffix}",
+                True,
+                color,
+            )
             screen.blit(text, (15, y_pos))
             y_pos += 25
-    
+
     # Draw played cards in center menggunakan pygame_cards
-    if client.game_data['played_cards']:
+    if client.game_data["played_cards"]:
         center_x = WIDTH // 2
         center_y = HEIGHT // 2
-        
-        played_cards = [CapsaClientCard(card_data) for card_data in client.game_data['played_cards']]
+
+        played_cards = [
+            CapsaClientCard(card_data) for card_data in client.game_data["played_cards"]
+        ]
         start_x = center_x - (len(played_cards) * (CARD_WIDTH + 5) // 2)
-        
+
         for i, card in enumerate(played_cards):
             x = start_x + i * (CARD_WIDTH + 5)
             y = center_y - CARD_HEIGHT // 2
             card.display(screen, x, y)
-    
+
     # Draw my hand menggunakan pygame_cards seperti di game.py
     card_rects = []
-    if client.game_data['my_hand']:
+    if client.game_data["my_hand"]:
         # Store both the card object and original data together
-        my_cards_data = client.game_data['my_hand']
+        my_cards_data = client.game_data["my_hand"]
         my_cards = [CapsaClientCard(card_data) for card_data in my_cards_data]
-        
+
         start_x = 50
         start_y = HEIGHT - CARD_HEIGHT - 50
         card_spacing = min(50, (WIDTH - 100) // len(my_cards))
-        
+
         temp_card = []
         for i, (card, card_data) in enumerate(zip(my_cards, my_cards_data)):
             x = start_x + i * card_spacing
-            selected = card.number in [c['number'] for c in client.selected_cards]
+            selected = i in client.selected_cards
             y = start_y - (30 if selected else 0)  # Raise selected cards more
-            
+
             rect = card.display(screen, x, y, selected)
             temp_card.append((rect, card_data))  # Use the paired original data
         card_rects = temp_card[::-1]
-    
+
     # Draw buttons
     button_rects = []
-    if (client.game_data['game_active'] and 
-        client.player_index == client.game_data['current_player_index']):
-        
+    if (
+        client.game_data["game_active"]
+        and client.player_index == client.game_data["current_player_index"]
+    ):
         # Play button
         play_rect = pygame.Rect(WIDTH - 200, HEIGHT - 100, 80, 40)
         pygame.draw.rect(screen, GREEN, play_rect)
         pygame.draw.rect(screen, BLACK, play_rect, 2)
         play_text = font_medium.render("PLAY", True, WHITE)
         screen.blit(play_text, (play_rect.x + 20, play_rect.y + 12))
-        button_rects.append(('PLAY', play_rect))
-        
+        button_rects.append(("PLAY", play_rect))
+
         # Pass button
         pass_rect = pygame.Rect(WIDTH - 110, HEIGHT - 100, 80, 40)
         pygame.draw.rect(screen, RED, pass_rect)
         pygame.draw.rect(screen, BLACK, pass_rect, 2)
         pass_text = font_medium.render("PASS", True, WHITE)
         screen.blit(pass_text, (pass_rect.x + 20, pass_rect.y + 12))
-        button_rects.append(('PASS', pass_rect))
-    
+        button_rects.append(("PASS", pass_rect))
+
     # Start game button
-    if not client.game_data['game_active']:
-        start_rect = pygame.Rect(WIDTH//2 - 60, HEIGHT - 60, 120, 40)
+    if not client.game_data["game_active"]:
+        start_rect = pygame.Rect(WIDTH // 2 - 60, HEIGHT - 60, 120, 40)
         pygame.draw.rect(screen, BLUE, start_rect)
         pygame.draw.rect(screen, BLACK, start_rect, 2)
         start_text = font_medium.render("START GAME", True, WHITE)
         screen.blit(start_text, (start_rect.x + 10, start_rect.y + 12))
-        button_rects.append(('START', start_rect))
-    
+        button_rects.append(("START", start_rect))
+
     # Draw message
     if client.message and client.message_timer > 0:
         msg_text = font_medium.render(client.message, True, WHITE)
-        msg_rect = msg_text.get_rect(center=(WIDTH//2, 100))
+        msg_rect = msg_text.get_rect(center=(WIDTH // 2, 100))
         pygame.draw.rect(screen, BLACK, msg_rect.inflate(20, 10))
         pygame.draw.rect(screen, WHITE, msg_rect.inflate(20, 10), 2)
         screen.blit(msg_text, msg_rect)
         client.message_timer -= 1
-    
+
     # Show selected cards count
     if client.selected_cards:
-        selected_text = font_medium.render(f"Selected: {len(client.selected_cards)} cards", True, SELECTED_COLOR)
+        selected_text = font_medium.render(
+            f"Selected: {len(client.selected_cards)} cards", True, SELECTED_COLOR
+        )
         screen.blit(selected_text, (WIDTH - 300, HEIGHT - 150))
-    
+
     # Show pass status summary if players have passed
-    if players_passed and client.game_data['game_active']:
+    if players_passed and client.game_data["game_active"]:
         pass_count = len(players_passed)
-        pass_summary = font_small.render(f"{pass_count} player(s) passed this round", True, GREY)
+        pass_summary = font_small.render(
+            f"{pass_count} player(s) passed this round", True, GREY
+        )
         screen.blit(pass_summary, (WIDTH - 250, HEIGHT - 200))
-    
+
     return card_rects, button_rects
+
 
 # Initialize deck
 deck = []
