@@ -6,7 +6,7 @@ import logging
 from game import Player
 from game import deal, who_starts, play
 
-class GameSession:
+class GameSession:  
     def __init__(self, session_id, session_name, creator_name):
         self.session_id = session_id
         self.session_name = session_name

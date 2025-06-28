@@ -16,7 +16,6 @@ from game import (
     show_sessions_list,
     init_pygame
 )
-from card import CapsaClientCard
 
 class CapsaClient:
     def __init__(self):

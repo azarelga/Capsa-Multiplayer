@@ -4,7 +4,7 @@ import time
 import logging
 import json
 from concurrent.futures import ThreadPoolExecutor
-from game_server import CapsaGameServer
+from server import CapsaGameServer
 
 game_server = CapsaGameServer()
 
