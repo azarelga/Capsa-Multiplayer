@@ -4,7 +4,33 @@ import threading
 import json
 import logging
 
-from game import Player, deal, who_starts, play
+from game import (
+    Card, Player, deal, who_starts, play, value_checker, quantity_checker, deck,
+    CARD_WIDTH, CARD_HEIGHT, WHITE, BLACK, RED, GREEN, BLUE, PURPLE, GREY, 
+    LIGHT_GREY, DARK_GREEN, LIGHT_BLUE, WINDOW_WIDTH, WINDOW_HEIGHT
+)
+
+REDIS_HOST = 'capsagamecache.redis.cache.windows.net'
+REDIS_PORT = 6380 # 6380 for SSL/TLS, 6379 for non-SSL
+REDIS_PASSWORD = 'UG7gX2plA0IUVi2OT5nnKiNYOJ8IiVkPJAzCaIIqC8s='
+REDIS_DB = 0 # Default Redis database
+
+try:
+    redis_client = redis.StrictRedis(
+        host=REDIS_HOST,
+        port=REDIS_PORT,
+        # username='default',
+        password=REDIS_PASSWORD,
+        db=REDIS_DB,
+        ssl=True, 
+        decode_responses=True 
+    )
+    redis_client.ping()
+    print("Successfully connected to Azure Cache for Redis.")
+except redis.exceptions.ConnectionError as e:
+    print(f"ERROR: Could not connect to Redis: {e}")
+    sys.exit(1) # Exit if Redis connection fails at startup
+
 
 
 class GameSession:
@@ -72,8 +98,16 @@ class CapsaGameServer:
 
     def send_session_menu(self, client_id):
         sessions_list = []
-        for session in self.sessions.values():
-            sessions_list.append(session.to_dict())
+        active_session_ids = redis_client.smembers("active_sessions")
+
+        for sid in active_session_ids:
+            session_data = redis_client.hgetall(f"session:{sid}")
+            if session_data:
+                session_data['session_id'] = sid
+                session_data['player_count'] = int(session_data.get('player_count', '0'))
+                sessions_list.append(session_data)
+            else:
+                redis_client.srem("active_sessions", sid) 
 
         self.send_to_client(
             client_id, {"command": "SESSION_MENU", "sessions": sessions_list}
@@ -144,10 +178,11 @@ class CapsaGameServer:
 
     def join_session(self, client_id, session_id, player_name):
         with self.lock:
-            if session_id not in self.sessions:
-                self.send_to_client(
-                    client_id, {"command": "ERROR", "message": "Session not found"}
-                )
+            if not redis_client.sismember("active_sessions", session_id):
+                self.send_to_client(client_id, {
+                    'command': 'ERROR',
+                    'message': 'Session not found or no longer active'
+                })
                 return
 
             session = self.sessions[session_id]

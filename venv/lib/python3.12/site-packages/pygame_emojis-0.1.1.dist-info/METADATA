@@ -1,0 +1,83 @@
+Metadata-Version: 2.1
+Name: pygame_emojis
+Version: 0.1.1
+Summary: API for using emojis in pygame.
+Project-URL: Homepage, https://github.com/ScienceGamez/pygame_emojis
+Project-URL: Bug Tracker, https://github.com/ScienceGamez/pygame_emojis/issues
+Author-email: Lionel42 <lionel@sciencegames.ch>
+License: MIT License
+        
+        Copyright (c) 2022 ScienceGamez
+        
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+        
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+        
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Requires-Python: >=3.10
+Requires-Dist: cairosvg
+Requires-Dist: emoji
+Requires-Dist: pygame
+Description-Content-Type: text/markdown
+
+# Pygame Emojis
+
+✨✨✨ Load emojis in pygame. ✨✨✨
+
+[![Upload Python Package](https://github.com/ScienceGamez/pygame_emojis/actions/workflows/python-publish.yml/badge.svg)](https://github.com/ScienceGamez/pygame_emojis/actions/workflows/python-publish.yml)
+
+This contain  **open source emojis**  from https://openmoji.org/
+
+![example of how it looks](emoji.png)
+
+
+## Usage
+
+It is very easy to include emojis in your game 😊
+
+First install the  📦 package 📦
+```
+pip install pygame-emojis
+```
+
+Then import the package from 🐍 python 🐍
+
+```python
+
+from pygame_emojis import load_emoji
+
+# Choose the size
+size = (64, 64)
+
+# Load the emoji as a pygame.Surface
+surface = load_emoji('😍', size)
+
+```
+
+📥 The first time you use this package, it will automatically download  a svg database. ✌🏼
+
+## Acknowledgements ❤️
+
+
+Emojis come from https://openmoji.org/.
+
+See also their repo https://github.com/hfg-gmuend/openmoji/.
+
+Thanks a lot to the whole team: https://openmoji.org/about/#acknowledgement.
+
+Thanks a lot to the developpers from pygame 🎮: https://www.pygame.org
