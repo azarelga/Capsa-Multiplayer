@@ -18,6 +18,29 @@ from game import (
     LIGHT_GREY, DARK_GREEN, LIGHT_BLUE, WINDOW_WIDTH, WINDOW_HEIGHT
 )
 
+REDIS_HOST = 'capsagamecache.redis.cache.windows.net'
+REDIS_PORT = 6380 # 6380 for SSL/TLS, 6379 for non-SSL
+REDIS_PASSWORD = ''
+REDIS_DB = 0 # Default Redis database
+
+try:
+    redis_client = redis.StrictRedis(
+        host=REDIS_HOST,
+        port=REDIS_PORT,
+        # username='default',
+        password=REDIS_PASSWORD,
+        db=REDIS_DB,
+        ssl=True, 
+        decode_responses=True 
+    )
+    redis_client.ping()
+    print("Successfully connected to Azure Cache for Redis.")
+except redis.exceptions.ConnectionError as e:
+    print(f"ERROR: Could not connect to Redis: {e}")
+    sys.exit(1) # Exit if Redis connection fails at startup
+
+
+
 class GameSession:
     def __init__(self, session_id, session_name, creator_name):
         self.session_id = session_id

@@ -1,0 +1,52 @@
+Metadata-Version: 2.1
+Name: pygame-cards
+Version: 0.1.3
+Summary: Framework for simple cards games powered by Pygame
+Author-email: Lionel42 <lionel@sciencegames.ch>
+License: MIT License
+        
+        Copyright (c) 2022 ScienceGamez
+        
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+        
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+        
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+        
+Project-URL: Homepage, https://github.com/ScienceGamez/pygame_cards
+Project-URL: Bug Tracker, https://github.com/ScienceGamez/pygame_cards/issues
+Project-URL: Documentation, https://pygame-cards.readthedocs.io/en/latest/
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: pygame
+Requires-Dist: pygame-emojis
+Requires-Dist: numpy
+Provides-Extra: doc
+Requires-Dist: sphinx ; extra == 'doc'
+Requires-Dist: furo ; extra == 'doc'
+
+# Pygame Cards
+
+A simple card games for pygame.
+
+Handles graphics and interaction with the mouse and pygame events.
+
+You can check [our official documentation](https://pygame-cards.readthedocs.io)
+
+[![Documentation Status](https://readthedocs.org/projects/pygame-cards/badge/?version=latest)](https://pygame-cards.readthedocs.io/en/latest/?badge=latest)
