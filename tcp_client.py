@@ -14,6 +14,11 @@ from game import (
     LIGHT_BLUE, GREY, LIGHT_GREY,
     card_sets
 )
+
+# Define a better highlight color if LIGHT_BLUE isn't working well
+HIGHLIGHT_COLOR = (255, 255, 0)  # Bright yellow for better visibility
+SELECTED_COLOR = (0, 255, 255)   # Cyan for selected cards
+
 def show_session_menu():
     print("\n" + "="*50)
     print("CAPSA MULTIPLAYER - SESSION SELECTION")
@@ -154,9 +159,13 @@ class CapsaClientCard:
             suit_text = suit_font.render(suits[self.suit], True, suit_colors[self.suit])
             screen.blit(suit_text, (left + CARD_WIDTH//2 - 10, top + CARD_HEIGHT//2 - 15))
 
-        # Highlight if selected seperti di game.py
+        # Better highlight for selected cards
         if selected:
-            pygame.draw.rect(screen, LIGHT_BLUE, self.rect, 5)
+            # Draw a thick colored border around the selected card
+            pygame.draw.rect(screen, SELECTED_COLOR, self.rect, 6)
+            # Also draw a glow effect
+            glow_rect = pygame.Rect(left - 3, top - 3, CARD_WIDTH + 6, CARD_HEIGHT + 6)
+            pygame.draw.rect(screen, HIGHLIGHT_COLOR, glow_rect, 3)
 
         return self.rect
 
@@ -351,7 +360,7 @@ def draw_game(screen, client, WIDTH, HEIGHT):
     
     # Player info with custom names
     if client.player_name:
-        player_text = font_medium.render(f"You: {client.player_name}", True, LIGHT_BLUE)
+        player_text = font_medium.render(f"You: {client.player_name}", True, SELECTED_COLOR)  # Use better color
         screen.blit(player_text, (10, 50))
     
     # Current player with custom names
@@ -368,12 +377,12 @@ def draw_game(screen, client, WIDTH, HEIGHT):
         if name:
             count = client.game_data['players_card_counts'][i] if i < len(client.game_data['players_card_counts']) else 0
             
-            # Highlight current player and yourself differently
+            # Better color highlighting
             if i == client.game_data['current_player_index']:
-                color = LIGHT_BLUE
+                color = HIGHLIGHT_COLOR  # Bright yellow for current player
                 prefix = "► "
             elif i == client.player_index:
-                color = LIGHT_BLUE
+                color = SELECTED_COLOR  # Cyan for yourself
                 prefix = "● "
             else:
                 color = WHITE
@@ -400,19 +409,23 @@ def draw_game(screen, client, WIDTH, HEIGHT):
     # Draw my hand menggunakan pygame_cards seperti di game.py
     card_rects = []
     if client.game_data['my_hand']:
-        my_cards = [CapsaClientCard(card_data) for card_data in client.game_data['my_hand']]
+        # Store both the card object and original data together
+        my_cards_data = client.game_data['my_hand']
+        my_cards = [CapsaClientCard(card_data) for card_data in my_cards_data]
         
         start_x = 50
         start_y = HEIGHT - CARD_HEIGHT - 50
         card_spacing = min(50, (WIDTH - 100) // len(my_cards))
         
-        for i, card in enumerate(my_cards):
+        temp_card = []
+        for i, (card, card_data) in enumerate(zip(my_cards, my_cards_data)):
             x = start_x + i * card_spacing
             selected = card.number in [c['number'] for c in client.selected_cards]
-            y = start_y - (20 if selected else 0)  # Raise selected cards
+            y = start_y - (30 if selected else 0)  # Raise selected cards more
             
             rect = card.display(screen, x, y, selected)
-            card_rects.append((rect, client.game_data['my_hand'][i]))  # Return original data
+            temp_card.append((rect, card_data))  # Use the paired original data
+        card_rects = temp_card[::-1]
     
     # Draw buttons
     button_rects = []
@@ -453,6 +466,11 @@ def draw_game(screen, client, WIDTH, HEIGHT):
         screen.blit(msg_text, msg_rect)
         client.message_timer -= 1
     
+    # Show selected cards count
+    if client.selected_cards:
+        selected_text = font_medium.render(f"Selected: {len(client.selected_cards)} cards", True, SELECTED_COLOR)
+        screen.blit(selected_text, (WIDTH - 300, HEIGHT - 150))
+    
     return card_rects, button_rects
 
 def main():
@@ -487,9 +505,10 @@ def main():
                     if rect.collidepoint(event.pos):
                         if card in client.selected_cards:
                             client.selected_cards.remove(card)
+                            print(f"Card deselected: {card['pp_value']} of suit {card['suit']}")
                         else:
                             client.selected_cards.append(card)
-                        print(f"Card clicked: {card['pp_value']} of suit {card['suit']}")
+                            print(f"Card selected: {card['pp_value']} of suit {card['suit']}")
                         break
                 
                 # Handle button clicks

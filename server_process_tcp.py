@@ -1,10 +1,8 @@
 from socket import *
 import socket
 import time
-import sys
 import logging
 import json
-import threading
 from concurrent.futures import ThreadPoolExecutor
 from tcp_game import CapsaGameServer
 
@@ -29,22 +27,24 @@ def ProcessTheClient(connection, address):
                     d = data.decode()
                     rcv = rcv + d
 
-                    while '\n' in rcv:
-                        line, rcv = rcv.split('\n', 1)
+                    while "\n" in rcv:
+                        line, rcv = rcv.split("\n", 1)
                         if line.strip():
                             try:
                                 command = json.loads(line.strip())
                                 print(f"Command from {client_id}: {command}")
                                 game_server.handle_command(client_id, command)
                             except json.JSONDecodeError as e:
-                                logging.warning(f"Invalid JSON from {client_id}: {line} | Error: {e}")
+                                logging.warning(
+                                    f"Invalid JSON from {client_id}: {line} | Error: {e}"
+                                )
                 else:
                     print(f"Client {client_id} disconnected (no data)")
                     break
 
             except socket.timeout:
                 try:
-                    ping_msg = json.dumps({'command': 'PING'}) + '\n'
+                    ping_msg = json.dumps({"command": "PING"}) + "\n"
                     connection.send(ping_msg.encode())
                     print(f"Ping sent to {client_id}")
                 except:
@@ -75,7 +75,7 @@ def Server():
     my_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
     try:
-        my_socket.bind(('0.0.0.0', 55556))
+        my_socket.bind(("0.0.0.0", 55556))
         my_socket.listen(20)
 
         print("=" * 50)
@@ -96,7 +96,9 @@ def Server():
 
                     print(f"Client #{client_counter} connected from {client_address}")
 
-                    future = executor.submit(ProcessTheClient, connection, client_address)
+                    future = executor.submit(
+                        ProcessTheClient, connection, client_address
+                    )
                     active_clients.append(future)
 
                     active_clients = [f for f in active_clients if f.running()]
@@ -105,7 +107,9 @@ def Server():
                     human_players = len(game_server.clients)
                     ai_players = 4 - human_players if human_players > 0 else 0
 
-                    print(f"Active connections: {active_count} | Human players: {human_players} | AI players: {ai_players}")
+                    print(
+                        f"Active connections: {active_count} | Human players: {human_players} | AI players: {ai_players}"
+                    )
 
                 except Exception as e:
                     logging.error(f"Error accepting connection: {e}")
@@ -120,8 +124,7 @@ def Server():
 
 def main():
     logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s'
+        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
     )
 
     try:
@@ -134,3 +137,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
