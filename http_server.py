@@ -461,10 +461,13 @@ class HTTPCapsaGameServer(CapsaGameServer):
         }
 
     def card_to_dict(self, card):
-        """Convert a card object to dictionary"""
-        if hasattr(card, "number") and hasattr(card, "suit"):
-            return {"number": card.number, "suit": card.suit}
-        return {"number": str(card), "suit": ""}
+        return {
+            "number": card.number,
+            "suit": card.suit,
+            "value": card.value,
+            "pp_value": card.pp_value,
+            "selected": getattr(card, "selected", False),
+        }
 
     def send_session_menu(self, client_id):
         """Override to return data instead of sending"""
