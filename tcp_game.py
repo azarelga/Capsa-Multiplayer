@@ -20,7 +20,7 @@ from game import (
 
 REDIS_HOST = 'capsagamecache.redis.cache.windows.net'
 REDIS_PORT = 6380 # 6380 for SSL/TLS, 6379 for non-SSL
-REDIS_PASSWORD = 'UG7gX2plA0IUVi2OT5nnKiNYOJ8IiVkPJAzCaIIqC8s='
+REDIS_PASSWORD = ''
 REDIS_DB = 0 # Default Redis database
 
 try:
@@ -172,6 +172,7 @@ class CapsaGameServer:
                 "created_at": session.created_at.isoformat(),
                 "player_count": 1,
                 "status": "waiting",
+                "players_names_json": json.dumps([creator_name, "", "", ""]),
                 "game_state_json": json.dumps(self._get_initial_game_state_json())
             }
             redis_client.hmset(f"session:{session_id}", session_data)
@@ -711,49 +712,74 @@ class CapsaGameServer:
 
     # In CapsaGameServer class
     def broadcast_game_state_to_session(self, session_id):
-        session_data_from_redis = redis_client.hgetall(f"session:{session_id}")
-        if not session_data_from_redis:
-            logging.warning(f"Session {session_id} not found in Redis during broadcast.")
-            return
+        try:
+            session_data_from_redis = redis_client.hgetall(f"session:{session_id}")
+            if not session_data_from_redis:
+                logging.warning(f"Session {session_id} not found in Redis during broadcast.")
+                return
 
-        session = self.sessions.get(session_id)
-        if not session:
-             logging.warning(f"Attempted to broadcast for session {session_id} not locally managed by this VM.")
-             return
+            session = self.sessions.get(session_id)
+            if not session:
+                 logging.warning(f"Attempted to broadcast for session {session_id} not locally managed by this VM.")
+                 return
 
-        global_players_names = json.loads(session_data_from_redis.get('players_names_json', '["", "", "", ""]'))
-        global_player_count = int(session_data_from_redis.get('player_count', 0))
+            # Safely get players_names_json with fallback
+            players_names_json = session_data_from_redis.get('players_names_json', '["", "", "", ""]')
+            try:
+                global_players_names = json.loads(players_names_json)
+            except (json.JSONDecodeError, TypeError):
+                global_players_names = ["", "", "", ""]
+                
+            global_player_count = int(session_data_from_redis.get('player_count', 0))
 
-        for i in range(4):
-            session.game_state.players_names[i] = global_players_names[i]
+            for i in range(4):
+                session.game_state.players_names[i] = global_players_names[i]
 
-        hands_data = {}
-        for client_id, client_info in session.clients.items():
-            player_index = client_info['player_index']
-            hands_data[client_id] = [self.card_to_dict(card) for card in session.game_state.players[player_index].hand]
+            hands_data = {}
+            for client_id, client_info in session.clients.items():
+                player_index = client_info['player_index']
+                if 0 <= player_index < len(session.game_state.players):
+                    hands_data[client_id] = [self.card_to_dict(card) for card in session.game_state.players[player_index].hand]
+                else:
+                    hands_data[client_id] = []
 
-        played_cards_data = [self.card_to_dict(card) for card in session.game_state.played_cards]
+            played_cards_data = [self.card_to_dict(card) for card in session.game_state.played_cards]
 
-        for client_id, client_info in session.clients.items():
-            state_msg = {
-                'command': 'GAME_UPDATE',
-                'session_id': session_id,
-                'session_name': session_data_from_redis.get('session_name'),
-                'current_player_index': session.game_state.current_player_index,
-                'current_player_name': session.game_state.players[session.game_state.current_player_index].name,
-                'players_names': global_players_names,
-                'my_hand': hands_data[client_id],
-                'my_player_index': client_info['player_index'],
-                'played_cards': played_cards_data,
-                'players_card_counts': [len(p.hand) for p in session.game_state.players],
-                'game_active': session.game_state.game_active,
-                'winner': session.game_state.winner,
-                'players_passed': list(session.game_state.round_passes)
-            }
-            self.send_to_client(client_id, state_msg)
+            for client_id, client_info in session.clients.items():
+                # Safely get current player name
+                current_player_name = ""
+                if (0 <= session.game_state.current_player_index < len(session.game_state.players) and 
+                    session.game_state.players[session.game_state.current_player_index]):
+                    current_player_name = session.game_state.players[session.game_state.current_player_index].name
+                
+                state_msg = {
+                    'command': 'GAME_UPDATE',
+                    'session_id': session_id,
+                    'session_name': session_data_from_redis.get('session_name', 'Unknown Session'),
+                    'current_player_index': session.game_state.current_player_index,
+                    'current_player_name': current_player_name,
+                    'players_names': global_players_names,
+                    'my_hand': hands_data[client_id],
+                    'my_player_index': client_info['player_index'],
+                    'played_cards': played_cards_data,
+                    'players_card_counts': [len(p.hand) for p in session.game_state.players],
+                    'game_active': session.game_state.game_active,
+                    'winner': session.game_state.winner,
+                    'players_passed': list(session.game_state.round_passes)
+                }
+                self.send_to_client(client_id, state_msg)
 
-        current_player_name = session.game_state.players[session.game_state.current_player_index].name
-        print(f"Broadcasting game state to session '{session.session_name}' - Current player: {current_player_name}")
+            current_player_name = ""
+            if (0 <= session.game_state.current_player_index < len(session.game_state.players) and 
+                session.game_state.players[session.game_state.current_player_index]):
+                current_player_name = session.game_state.players[session.game_state.current_player_index].name
+                
+            print(f"Broadcasting game state to session '{session.session_name}' - Current player: {current_player_name}")
+            
+        except Exception as e:
+            logging.error(f"Error in broadcast_game_state_to_session for session {session_id}: {e}")
+            import traceback
+            traceback.print_exc()
 
     def card_to_dict(self, card):
         return {
