@@ -188,8 +188,8 @@ class CapsaClient:
             'winner': None,
             'players_passed': []
         }
-        # self.server_address = ('localhost', 55556) #IP LoadBalancer
-        self.server_address = ('57.155.178.71', 55556) #IP LoadBalancer
+        self.server_address = ('localhost', 55556) #IP LoadBalancer
+        # self.server_address = ('57.155.178.71', 55556) #IP LoadBalancer
         self.selected_cards = []
         self.message = ""
         self.message_timer = 0
@@ -360,7 +360,7 @@ def draw_game(screen, client, WIDTH, HEIGHT):
     
     # Player info with custom names
     if client.player_name:
-        player_text = font_medium.render(f"You: {client.player_name}", True, SELECTED_COLOR)  # Use better color
+        player_text = font_medium.render(f"You: {client.player_name}", True, SELECTED_COLOR)
         screen.blit(player_text, (10, 50))
     
     # Current player with custom names
@@ -373,23 +373,34 @@ def draw_game(screen, client, WIDTH, HEIGHT):
     screen.blit(title_players, (10, y_pos))
     y_pos += 30
     
+    # Get list of players who passed this round
+    players_passed = client.game_data.get('players_passed', [])
+    
     for i, name in enumerate(client.game_data['players_names']):
         if name:
             count = client.game_data['players_card_counts'][i] if i < len(client.game_data['players_card_counts']) else 0
             
-            # Better color highlighting
-            if i == client.game_data['current_player_index']:
+            # Determine color and prefix based on player status
+            if i in players_passed:
+                # Player has passed - show in grey/dim color
+                color = GREY
+                prefix = "X "  # X to indicate passed
+                status_suffix = " (PASSED)"
+            elif i == client.game_data['current_player_index']:
                 color = HIGHLIGHT_COLOR  # Bright yellow for current player
                 prefix = "> "
+                status_suffix = ""
             elif i == client.player_index:
                 color = SELECTED_COLOR  # Cyan for yourself
                 prefix = "* "
+                status_suffix = ""
             else:
                 color = WHITE
                 prefix = "  "
+                status_suffix = ""
             
-            # Show slot number and custom name
-            text = font_small.render(f"{prefix}Slot {i+1}: {name} ({count} cards)", True, color)
+            # Show slot number, custom name, and pass status
+            text = font_small.render(f"{prefix}Slot {i+1}: {name} ({count} cards){status_suffix}", True, color)
             screen.blit(text, (15, y_pos))
             y_pos += 25
     
@@ -470,6 +481,12 @@ def draw_game(screen, client, WIDTH, HEIGHT):
     if client.selected_cards:
         selected_text = font_medium.render(f"Selected: {len(client.selected_cards)} cards", True, SELECTED_COLOR)
         screen.blit(selected_text, (WIDTH - 300, HEIGHT - 150))
+    
+    # Show pass status summary if players have passed
+    if players_passed and client.game_data['game_active']:
+        pass_count = len(players_passed)
+        pass_summary = font_small.render(f"{pass_count} player(s) passed this round", True, GREY)
+        screen.blit(pass_summary, (WIDTH - 250, HEIGHT - 200))
     
     return card_rects, button_rects
 
