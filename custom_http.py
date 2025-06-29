@@ -16,6 +16,18 @@ from game import (
     play,
 )
 
+ERROR_MESSAGES = {
+    1: "You must include the 3 of diamonds in your play",
+    2: "Invalid hand, try again!",
+    3: "You must play a higher pair than the previous play!",
+    4: "A three card play must be a three of a kind!",
+    5: "You must play a higher three of a kind than the previous play!",
+    6: "There is no valid four card play!",
+    7: "Invalid hand, try again!",
+    8: "You need to play a stronger hand!",
+    9: "You need to play a higher suit!",
+    10: "You need to play a better hand!",
+}
 
 class GameSession:
     def __init__(self, session_name, creator_name):
@@ -98,6 +110,7 @@ class GameSession:
                     "suit": c.suit,
                     "value": c.value,
                     "pp_value": c.pp_value,
+                    "card_id": f"{c.number}_{c.suit}"  # Add unique identifier
                 }
                 for c in sorted(player.hand, key=lambda x: x.number)
             ],
@@ -213,36 +226,37 @@ class HttpServer:
                     200, "OK", session.get_game_state_for_player(player_name)
                 )
             return self.response(404, "Not Found", "")
+        else:
+            return self.response(404, "Not Found", "")
 
-        files = glob("./*")
-        # print(files)
-        thedir = "./"
-        if object_address == "/":
-            return self.response(200, "OK", "Ini Adalah web Server percobaan", dict())
+        # files = glob("./*")
+        # # print(files)
+        # thedir = "./"
+        # if object_address == "/":
+        #     return self.response(200, "OK", "Ini Adalah web Server percobaan", dict())
 
-        if object_address == "/video":
-            return self.response(
-                302, "Found", "", dict(location="https://youtu.be/katoxpnTf04")
-            )
-        if object_address == "/santai":
-            return self.response(200, "OK", "santai saja", dict())
+        # if object_address == "/video":
+        #     return self.response(
+        #         302, "Found", "", dict(location="https://youtu.be/katoxpnTf04")
+        #     )
+        # if object_address == "/santai":
+        #     return self.response(200, "OK", "santai saja", dict())
 
-        object_address = object_address[1:]
-        if thedir + object_address not in files:
-            return self.response(404, "Not Found", "", {})
-        fp = open(
-            thedir + object_address, "rb"
-        )  # rb => artinya adalah read dalam bentuk binary
-        # harus membaca dalam bentuk byte dan BINARY
-        isi = fp.read()
+        # object_address = object_address[1:]
+        # if thedir + object_address not in files:
+        #     return self.response(404, "Not Found", "", {})
+        # fp = open(
+        #     thedir + object_address, "rb"
+        # )  # rb => artinya adalah read dalam bentuk binary
+        # # harus membaca dalam bentuk byte dan BINARY
+        # isi = fp.read()
 
-        fext = os.path.splitext(thedir + object_address)[1]
-        content_type = self.types.get(fext, "application/octet-stream")
+        # fext = os.path.splitext(thedir + object_address)[1]
+        # content_type = self.types.get(fext, "application/octet-stream")
 
-        headers = {}
-        headers["Content-type"] = content_type
-
-        return self.response(200, "OK", isi, headers)
+        # headers = {}
+        # headers["Content-type"] = 
+        # return self.response(200, "OK", isi, headers)
 
     def http_post(self, object_address, headers, body):
         try:
@@ -276,19 +290,21 @@ class HttpServer:
                     )
             return self.response(404, "Not Found", "")
 
-        if object_address.startswith("/sessions/") and object_address.endswith(
-            "/start"
-        ):
+        if object_address.startswith("/sessions/") and object_address.endswith("/start"):
             session_id = object_address.split("/")[2]
             session = self.game_sessions.get(session_id)
             if session:
+                print(f"Attempting to start game for session {session_id}")
+                print(f"Current players: {len(session.players)}")
+                print(f"Game state: {session.game_state}")
+                
                 if session.start_game():
                     return self.response(200, "OK", {"message": "Game started"})
                 else:
-                    return self.response(
-                        400, "Bad Request", {"error": "Game could not be started"}
-                    )
-            return self.response(404, "Not Found", "")
+                    error_msg = f"Cannot start game: {len(session.players)} players, state: {session.game_state.name}"
+                    print(error_msg)
+                    return self.response(400, "Bad Request", {"error": error_msg})
+            return self.response(404, "Not Found", {"error": "Session not found"})
 
         if object_address.startswith("/sessions/") and object_address.endswith("/play"):
             session_id = object_address.split("/")[2]
@@ -320,34 +336,29 @@ class HttpServer:
                         400, "Bad Request", {"error": "Invalid card index"}
                     )
 
-                # Basic validation
-                if not quantity_checker(
-                    played_cards, session.last_played_cards
-                ) or not value_checker(played_cards, session.last_played_cards):
-                    return self.response(400, "Bad Request", {"error": "Invalid move"})
+                # Use the play() function for comprehensive validation
+                play_result = play(played_cards, player.hand, session.last_played_cards)
+                
+                if play_result != 0:
+                    # Get the appropriate error message
+                    error_message = ERROR_MESSAGES.get(play_result, "Invalid move")
+                    return self.response(400, "Bad Request", {"error": error_message})
 
-                # First turn validation
-                if (
-                    session.last_player_to_play == session.current_player_index
-                    and not any(c.number == 0 for c in played_cards)
-                    and any(c.number == 0 for c in player.hand)
-                ):
-                    return self.response(
-                        400,
-                        "Bad Request",
-                        {"error": "You must play the 3 of diamonds on the first turn."},
-                    )
-
-                play(played_cards, player.hand, session.last_played_cards)
+                # Remove played cards from hand
+                for card in played_cards:
+                    player.hand.remove(card)
+                
                 session.last_played_cards = played_cards
                 session.last_player_to_play = player_index
                 session.passed_players = []
 
+                # Check for winner
                 if len(player.hand) == 0:
                     session.winners.append(player.name)
                     if len(session.winners) >= len(session.players) - 1:
                         session.game_state = GameState.GAME_OVER
 
+                # Move to next player
                 session.current_player_index = (session.current_player_index + 1) % len(
                     session.players
                 )
@@ -412,15 +423,12 @@ class HttpServer:
         return self.response(404, "Not Found", "")
 
 
-# >>> import os.path
-# >>> ext = os.path.splitext('/ak/52.png')
-
 if __name__ == "__main__":
     httpserver = HttpServer()
-    d = httpserver.proses("GET testing.txt HTTP/1.0")
-    print(d)
-    d = httpserver.proses("GET donalbebek.jpg HTTP/1.0")
-    print(d)
+    # d = httpserver.proses("GET testing.txt HTTP/1.0")
+    # print(d)
+    # d = httpserver.proses("GET donalbebek.jpg HTTP/1.0")
+    # print(d)
     # d = httpserver.http_get('testing2.txt',{})
     # print(d)
 # d = httpserver.http_get('testing.txt')

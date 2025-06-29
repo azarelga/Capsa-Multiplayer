@@ -1,7 +1,4 @@
 from socket import *
-import socket
-import time
-import sys
 import logging
 import threading
 import socketserver
@@ -27,16 +24,17 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             if not data:
                 return
 
-            logging.info(f"---REQUEST FROM {self.client_address}---")
-            logging.info(data.decode())
-            logging.info("---------------------")
+            # logging.info(f"---REQUEST FROM {self.client_address}---")
+            # logging.info(data.decode())
+            # logging.info("---------------------")
 
             # Process the request using the shared httpserver instance
             response = httpserver.proses(data.decode())
 
-            logging.info(f"---RESPONSE TO {self.client_address}---")
-            logging.info(response.decode())
-            logging.info("---------------------")
+            if data.startswith(b"POST"):    
+                logging.info(f"---RESPONSE TO {self.client_address}---")
+                logging.info(response.decode())
+                logging.info("---------------------")
 
             self.request.sendall(response)
         except Exception as e:
@@ -51,8 +49,6 @@ def main():
 
     # Create the server, binding to localhost on port 8886
     with socketserver.ThreadingTCPServer((HOST, PORT), MyTCPHandler) as server:
-        # Activate the server; this will keep running until you
-        # interrupt the program with Ctrl-C
         server.serve_forever()
 
 

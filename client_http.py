@@ -91,10 +91,17 @@ class CapsaClient:
     def start_game(self):
         try:
             response = requests.post(
-                f"{self.server_address}/sessions/{self.session_id}/start"
+                f"{self.server_address}/sessions/{self.session_id}/start",
+                json={},  # Ensure proper JSON body
+                headers={'Content-Type': 'application/json'}  # Explicit content type
             )
-            return response.status_code == 200
+            if response.status_code == 200:
+                return True
+            else:
+                self.show_message(f"Failed to start game: {response.status_code}", 3)
+                return False
         except requests.exceptions.ConnectionError:
+            self.show_message("Connection error", 2)
             return False
 
     def get_game_state(self):
@@ -123,7 +130,12 @@ class CapsaClient:
                 json={"player_name": self.player_name, "cards": card_indices},
             )
             if response.status_code != 200:
-                self.show_message(response.json().get("error", "Invalid move"), 2)
+                # Fix: Handle empty response body safely
+                try:
+                    error_msg = response.json().get("error", "Invalid move")
+                except (ValueError, requests.exceptions.JSONDecodeError):
+                    error_msg = f"Invalid move (HTTP {response.status_code})"
+                self.show_message(error_msg, 2)
             else:
                 self.selected_cards = []  # Clear selection after successful play
         except requests.exceptions.ConnectionError:
@@ -136,11 +148,16 @@ class CapsaClient:
                 json={"player_name": self.player_name},
             )
             if response.status_code != 200:
-                self.show_message(response.json().get("error", "Cannot pass"), 2)
+                # Fix: Handle empty response body safely
+                try:
+                    error_msg = response.json().get("error", "Cannot pass")
+                except (ValueError, requests.exceptions.JSONDecodeError):
+                    error_msg = f"Cannot pass (HTTP {response.status_code})"
+                self.show_message(error_msg, 2)
         except requests.exceptions.ConnectionError:
             self.show_message("Connection error", 2)
 
-    def show_message(self, text, duration):
+    def show_message(self, text, duration=3):
         self.message = text
         self.message_timer = duration * 60  # duration in seconds, 60 FPS
 
@@ -148,6 +165,15 @@ class CapsaClient:
 def main():
     server_address = "http://127.0.0.1:8886"
     client = CapsaClient(server_address)
+
+    print("--- Capsa Banting Client ---")
+    # Check server connection first
+    print("Connecting to server...")
+    sessions = client.get_sessions()
+    if sessions is None:
+        print("Could not connect to the server. Please ensure it is running.")
+        return
+    print("Connection successful.")
 
     while not client.connected:
         choice = show_session_menu()
@@ -159,15 +185,14 @@ def main():
                 print(f"Session '{session_name}' created. Waiting for other players...")
                 break
             else:
-                print("Could not create session. Is the server running?")
-                return
+                print("Could not create session. Please try again.")
         elif choice == 2:
             sessions = client.get_sessions()
             if sessions is None:
                 print("Could not connect to the server.")
-                return
+                continue
             if not sessions:
-                print("No sessions available.")
+                print("No sessions available. Check back later or create a new one.")
                 continue
 
             # show_sessions_list now returns the session_id directly
@@ -175,7 +200,7 @@ def main():
             if session_id:
                 player_name = get_player_name()
                 if not client.join_session(session_id, player_name):
-                    print("Failed to join session.")
+                    print("Failed to join session. The session might be full or already started.")
                 else:
                     print(
                         f"Joined session '{client.session_name}'. Waiting for game to start..."
@@ -183,14 +208,25 @@ def main():
                     break
 
         elif choice == 3:
+            print("Goodbye!")
             return
 
     # Pygame loop
+    print("Starting game UI...")
     screen, clock, WIDTH, HEIGHT, FPS = init_pygame()
     running = True
     card_rects, button_rects = [], []
+    last_update_time = 0
     while running:
-        client.get_game_state()
+        # Throttle game state updates
+        is_game_active = client.game_data.get("game_active", False)
+        now = time.time()
+        # Update every 3 seconds in menu, or more frequently when game is active
+        update_interval = 0.5 if is_game_active else 3.0
+
+        if now - last_update_time > update_interval:
+            client.get_game_state()
+            last_update_time = now
 
         if not client.connected:
             print("Lost connection to server.")
@@ -201,10 +237,12 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
             if event.type == pygame.MOUSEBUTTONDOWN:
+                
                 # Card selection logic
                 if client.game_data.get("my_hand"):
+                    card_selected = False  # Flag to track if a card was already selected
                     for rect, card_data in card_rects:
-                        if rect.collidepoint(event.pos):
+                        if rect.collidepoint(event.pos) and not card_selected:
                             card_number = card_data["number"]
                             # Find the index of the card in the original hand
                             for i, c in enumerate(client.game_data["my_hand"]):
@@ -214,7 +252,10 @@ def main():
                                     else:
                                         client.selected_cards.append(i)
                                     client.selected_cards.sort()
+                                    card_selected = True  # Mark that a card was selected
                                     break
+                            if card_selected:
+                                break  # Exit the card checking loop
 
                 # Button click logic
                 for name, rect in button_rects:
@@ -228,12 +269,14 @@ def main():
                             client.pass_turn()
                         elif name == "START":
                             client.start_game()
+                        break
 
         card_rects, button_rects = draw_game(screen, client, WIDTH, HEIGHT)
         pygame.display.flip()
         clock.tick(FPS)
 
     pygame.quit()
+    print("Game has been closed.")
 
 
 if __name__ == "__main__":
