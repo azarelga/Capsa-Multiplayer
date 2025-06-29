@@ -130,7 +130,8 @@ class GameSession:
             "game_over": self.game_state == GameState.GAME_OVER,
             "winners": self.winners,
             "players_passed": self.passed_players,
-            "player_hand_counts": {p.name: len(p.hand) for p in self.players},
+            "players_card_counts": [len(p.hand) for p in self.players],  # Fix: Array format
+            "last_player_to_play": self.last_player_to_play,  # Add missing field
         }
 
 
@@ -350,7 +351,6 @@ class HttpServer:
                 
                 session.last_played_cards = played_cards
                 session.last_player_to_play = player_index
-                session.passed_players = []
 
                 # Check for winner
                 if len(player.hand) == 0:
@@ -390,31 +390,40 @@ class HttpServer:
                         "Bad Request",
                         {"error": "You cannot pass, you must play a card."},
                     )
+                # Fix: Prevent passing if you're the last player to play and no one else has played
+                if (session.last_player_to_play == session.current_player_index and 
+                    not session.last_played_cards):
+                    return self.response(
+                        400, "Bad Request", 
+                        {"error": "You cannot pass, you must play a card."}
+                    )
 
-                session.passed_players.append(player_name)
-                session.current_player_index = (session.current_player_index + 1) % len(
-                    session.players
-                )
-                while (
-                    session.players[session.current_player_index].name
-                    in session.winners
-                ):
-                    session.current_player_index = (
-                        session.current_player_index + 1
-                    ) % len(session.players)
+                # Add player to passed list if not already there
+                if player_name not in session.passed_players:
+                    session.passed_players.append(player_index)
 
-                # If all other active players passed, the last player to play goes again
-                active_players = [
-                    p.name for p in session.players if p.name not in session.winners
-                ]
-                if all(
-                    p in session.passed_players
-                    for p in active_players
-                    if p != session.players[session.last_player_to_play].name
-                ):
+                # Move to next player, skipping winners
+                session.current_player_index = (session.current_player_index + 1) % len(session.players)
+                while session.players[session.current_player_index].name in session.winners:
+                    session.current_player_index = (session.current_player_index + 1) % len(session.players)
+
+                 # Check if all other active players have passed (NEW ROUND LOGIC)
+                active_player_indices = [i for i, p in enumerate(session.players) if p.name not in session.winners]
+
+                
+                # Count how many active players have passed
+                active_passed_count = len([p for p in session.passed_players if p in active_player_indices])
+                
+                # If all active players except the last player to play have passed, start new round
+                if (active_passed_count >= len(active_player_indices) - 1 and 
+                    session.last_player_to_play is not None and 
+                    session.last_player_to_play not in session.passed_players):
+                    print(f"New round starting: {active_passed_count}/{len(active_player_indices)} players passed")
                     session.current_player_index = session.last_player_to_play
                     session.last_played_cards = []
-                    session.passed_players = []
+                    session.passed_players = []  # ONLY clear here when new round starts
+                    print(f"Round reset - next player: {session.players[session.current_player_index].name}")
+
 
                 return self.response(200, "OK", {"message": "Pass successful"})
 
