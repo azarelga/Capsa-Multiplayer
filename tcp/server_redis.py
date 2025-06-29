@@ -8,8 +8,8 @@ import json
 import logging
 import redis
 
-from server import CapsaGameServer, GameSession, CapsaGameState
-from game import deal, who_starts
+from common.server import CapsaGameServer, GameSession, CapsaGameState
+from common.game import deal, who_starts
 
 REDIS_HOST = 'capsagamecache.redis.cache.windows.net'
 REDIS_PORT = 6380 # 6380 for SSL/TLS, 6379 for non-SSL

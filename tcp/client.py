@@ -7,7 +7,7 @@ import logging
 import time
 import math
 
-from game import (
+from common.game import (
     get_session_name, 
     get_creator_name, 
     get_player_name,

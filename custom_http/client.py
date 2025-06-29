@@ -2,7 +2,7 @@ import pygame
 import requests
 import json
 import time
-from game import (
+from common.game import (
     show_session_menu,
     get_session_name,
     get_creator_name,
@@ -10,7 +10,6 @@ from game import (
     get_player_name,
     init_pygame,
     draw_game,
-    GameState,
 )
 
 

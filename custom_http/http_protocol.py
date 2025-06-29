@@ -1,18 +1,11 @@
-import sys
-import os.path
 import uuid
-from glob import glob
 from datetime import datetime
 import json
-from game import (
+from common.game import (
     GameState,
     Player,
-    Card,
-    deck,
     deal,
     who_starts,
-    value_checker,
-    quantity_checker,
     play,
 )
 

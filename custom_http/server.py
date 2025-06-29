@@ -2,7 +2,7 @@ from socket import *
 import logging
 import threading
 import socketserver
-from custom_http import HttpServer
+from .http_protocol import HttpServer
 
 # A single, shared instance of the HttpServer to maintain game state
 httpserver = HttpServer()
