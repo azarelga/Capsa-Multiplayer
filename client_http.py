@@ -138,6 +138,14 @@ class CapsaClient:
                 self.show_message(error_msg, 2)
             else:
                 self.selected_cards = []  # Clear selection after successful play
+                 # Check for win notification
+                try:
+                    response_data = response.json()
+                    if "winner_notification" in response_data:
+                        # Show win notification for longer duration
+                        self.show_message(response_data["winner_notification"], 5)
+                except (ValueError, requests.exceptions.JSONDecodeError):
+                    pass  # No JSON response, that's okay
         except requests.exceptions.ConnectionError:
             self.show_message("Connection error", 2)
 

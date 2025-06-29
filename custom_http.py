@@ -352,11 +352,27 @@ class HttpServer:
                 session.last_played_cards = played_cards
                 session.last_player_to_play = player_index
 
-                # Check for winner
+                # Check for winner and send congratulations message
+                winner_message = None
                 if len(player.hand) == 0:
                     session.winners.append(player.name)
+                    winner_position = len(session.winners)
+                    
+                    if winner_position == 1:
+                        winner_message = f"🎉 Congratulations {player_name}! You WON! 🎉"
+                    elif winner_position == 2:
+                        winner_message = f"🥈 Great job {player_name}! You finished 2nd place!"
+                    elif winner_position == 3:
+                        winner_message = f"🥉 Well done {player_name}! You finished 3rd place!"
+                    
+                    # Check if game is over
                     if len(session.winners) >= len(session.players) - 1:
                         session.game_state = GameState.GAME_OVER
+                        # Find the last player (4th place)
+                        for p in session.players:
+                            if p.name not in session.winners:
+                                session.winners.append(p.name)
+                                break
 
                 # Move to next player
                 session.current_player_index = (session.current_player_index + 1) % len(
@@ -370,7 +386,13 @@ class HttpServer:
                         session.current_player_index + 1
                     ) % len(session.players)
 
-                return self.response(200, "OK", {"message": "Move successful"})
+                # Return success message with win notification if applicable
+                response_data = {"message": "Move successful"}
+                if winner_message:
+                    response_data["winner_notification"] = winner_message
+                    response_data["final_position"] = len(session.winners)
+                    
+                return self.response(200, "OK", response_data)
 
             return self.response(404, "Not Found", "")
 
@@ -399,7 +421,7 @@ class HttpServer:
                     )
 
                 # Add player to passed list if not already there
-                if player_name not in session.passed_players:
+                if player_index not in session.passed_players:
                     session.passed_players.append(player_index)
 
                 # Move to next player, skipping winners
@@ -409,7 +431,6 @@ class HttpServer:
 
                  # Check if all other active players have passed (NEW ROUND LOGIC)
                 active_player_indices = [i for i, p in enumerate(session.players) if p.name not in session.winners]
-
                 
                 # Count how many active players have passed
                 active_passed_count = len([p for p in session.passed_players if p in active_player_indices])
