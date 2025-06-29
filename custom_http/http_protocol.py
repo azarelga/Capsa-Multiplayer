@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime
 import json
@@ -8,6 +9,10 @@ from common.game import (
     who_starts,
     play,
 )
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 ERROR_MESSAGES = {
     1: "You must include the 3 of diamonds in your play",
@@ -21,6 +26,7 @@ ERROR_MESSAGES = {
     9: "You need to play a higher suit!",
     10: "You need to play a better hand!",
 }
+
 
 class GameSession:
     def __init__(self, session_name, creator_name):
@@ -103,7 +109,7 @@ class GameSession:
                     "suit": c.suit,
                     "value": c.value,
                     "pp_value": c.pp_value,
-                    "card_id": f"{c.number}_{c.suit}"  # Add unique identifier
+                    "card_id": f"{c.number}_{c.suit}",  # Add unique identifier
                 }
                 for c in sorted(player.hand, key=lambda x: x.number)
             ],
@@ -123,7 +129,9 @@ class GameSession:
             "game_over": self.game_state == GameState.GAME_OVER,
             "winners": self.winners,
             "players_passed": self.passed_players,
-            "players_card_counts": [len(p.hand) for p in self.players],  # Fix: Array format
+            "players_card_counts": [
+                len(p.hand) for p in self.players
+            ],  # Fix: Array format
             "last_player_to_play": self.last_player_to_play,  # Add missing field
         }
 
@@ -249,7 +257,7 @@ class HttpServer:
         # content_type = self.types.get(fext, "application/octet-stream")
 
         # headers = {}
-        # headers["Content-type"] = 
+        # headers["Content-type"] =
         # return self.response(200, "OK", isi, headers)
 
     def http_post(self, object_address, headers, body):
@@ -284,19 +292,21 @@ class HttpServer:
                     )
             return self.response(404, "Not Found", "")
 
-        if object_address.startswith("/sessions/") and object_address.endswith("/start"):
+        if object_address.startswith("/sessions/") and object_address.endswith(
+            "/start"
+        ):
             session_id = object_address.split("/")[2]
             session = self.game_sessions.get(session_id)
             if session:
-                print(f"Attempting to start game for session {session_id}")
-                print(f"Current players: {len(session.players)}")
-                print(f"Game state: {session.game_state}")
-                
+                logger.info(f"Attempting to start game for session {session_id}")
+                logger.info(f"Current players: {len(session.players)}")
+                logger.info(f"Game state: {session.game_state}")
+
                 if session.start_game():
                     return self.response(200, "OK", {"message": "Game started"})
                 else:
                     error_msg = f"Cannot start game: {len(session.players)} players, state: {session.game_state.name}"
-                    print(error_msg)
+                    logger.info(error_msg)
                     return self.response(400, "Bad Request", {"error": error_msg})
             return self.response(404, "Not Found", {"error": "Session not found"})
 
@@ -332,7 +342,7 @@ class HttpServer:
 
                 # Use the play() function for comprehensive validation
                 play_result = play(played_cards, player.hand, session.last_played_cards)
-                
+
                 if play_result != 0:
                     # Get the appropriate error message
                     error_message = ERROR_MESSAGES.get(play_result, "Invalid move")
@@ -341,7 +351,7 @@ class HttpServer:
                 # Remove played cards from hand
                 for card in played_cards:
                     player.hand.remove(card)
-                
+
                 session.last_played_cards = played_cards
                 session.last_player_to_play = player_index
 
@@ -350,14 +360,20 @@ class HttpServer:
                 if len(player.hand) == 0:
                     session.winners.append(player.name)
                     winner_position = len(session.winners)
-                    
+
                     if winner_position == 1:
-                        winner_message = f"🎉 Congratulations {player_name}! You WON! 🎉"
+                        winner_message = (
+                            f"🎉 Congratulations {player_name}! You WON! 🎉"
+                        )
                     elif winner_position == 2:
-                        winner_message = f"🥈 Great job {player_name}! You finished 2nd place!"
+                        winner_message = (
+                            f"🥈 Great job {player_name}! You finished 2nd place!"
+                        )
                     elif winner_position == 3:
-                        winner_message = f"🥉 Well done {player_name}! You finished 3rd place!"
-                    
+                        winner_message = (
+                            f"🥉 Well done {player_name}! You finished 3rd place!"
+                        )
+
                     # Check if game is over
                     if len(session.winners) >= len(session.players) - 1:
                         session.game_state = GameState.GAME_OVER
@@ -373,7 +389,7 @@ class HttpServer:
                 )
                 while (
                     session.players[session.current_player_index].name
-                    in session.winners
+                    in session.winners or session.current_player_index in session.passed_players
                 ):
                     session.current_player_index = (
                         session.current_player_index + 1
@@ -384,7 +400,7 @@ class HttpServer:
                 if winner_message:
                     response_data["winner_notification"] = winner_message
                     response_data["final_position"] = len(session.winners)
-                    
+
                 return self.response(200, "OK", response_data)
 
             return self.response(404, "Not Found", "")
@@ -405,39 +421,73 @@ class HttpServer:
                         "Bad Request",
                         {"error": "You cannot pass, you must play a card."},
                     )
+
                 # Fix: Prevent passing if you're the last player to play and no one else has played
-                if (session.last_player_to_play == session.current_player_index and 
-                    not session.last_played_cards):
+                if (
+                    session.last_player_to_play == session.current_player_index
+                    and not session.last_played_cards
+                ):
                     return self.response(
-                        400, "Bad Request", 
-                        {"error": "You cannot pass, you must play a card."}
+                        400,
+                        "Bad Request",
+                        {"error": "You cannot pass, you must play a card."},
                     )
 
                 # Add player to passed list if not already there
                 if player_index not in session.passed_players:
                     session.passed_players.append(player_index)
 
-                # Move to next player, skipping winners
-                session.current_player_index = (session.current_player_index + 1) % len(session.players)
-                while session.players[session.current_player_index].name in session.winners:
-                    session.current_player_index = (session.current_player_index + 1) % len(session.players)
+                # Move to next player, skipping winners AND passed players
+                session.current_player_index = (session.current_player_index + 1) % len(
+                    session.players
+                )
+                while (
+                    session.players[session.current_player_index].name
+                    in session.winners
+                    or session.current_player_index in session.passed_players
+                ):
+                    session.current_player_index = (
+                        session.current_player_index + 1
+                    ) % len(session.players)
 
-                 # Check if all other active players have passed (NEW ROUND LOGIC)
-                active_player_indices = [i for i, p in enumerate(session.players) if p.name not in session.winners]
-                
+                    # Safety check to prevent infinite loop
+                    active_non_passed = [
+                        i
+                        for i, p in enumerate(session.players)
+                        if p.name not in session.winners
+                        and i not in session.passed_players
+                    ]
+                    if not active_non_passed:
+                        # All active players have passed, trigger round reset immediately
+                        break
+
+                # Check if all other active players have passed (NEW ROUND LOGIC)
+                active_player_indices = [
+                    i
+                    for i, p in enumerate(session.players)
+                    if p.name not in session.winners
+                ]
+
                 # Count how many active players have passed
-                active_passed_count = len([p for p in session.passed_players if p in active_player_indices])
-                
+                active_passed_count = len(
+                    [p for p in session.passed_players if p in active_player_indices]
+                )
+
                 # If all active players except the last player to play have passed, start new round
-                if (active_passed_count >= len(active_player_indices) - 1 and 
-                    session.last_player_to_play is not None and 
-                    session.last_player_to_play not in session.passed_players):
-                    print(f"New round starting: {active_passed_count}/{len(active_player_indices)} players passed")
+                if (
+                    active_passed_count >= len(active_player_indices) - 1
+                    and session.last_player_to_play is not None
+                    and session.last_player_to_play not in session.passed_players
+                ):
+                    logger.info(
+                        f"New round starting: {active_passed_count}/{len(active_player_indices)} players passed"
+                    )
                     session.current_player_index = session.last_player_to_play
                     session.last_played_cards = []
-                    session.passed_players = []  # ONLY clear here when new round starts
-                    print(f"Round reset - next player: {session.players[session.current_player_index].name}")
-
+                    session.passed_players = []
+                    logger.info(
+                        f"Round reset - next player: {session.players[session.current_player_index].name}"
+                    )
 
                 return self.response(200, "OK", {"message": "Pass successful"})
 
