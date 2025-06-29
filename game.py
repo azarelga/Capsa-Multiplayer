@@ -322,16 +322,20 @@ def value_checker(my_cards, last_cards):
                 v = value(five_cards)
                 s = suit(five_cards)
                 if v == [0, 1, 2, 3, 4]:
+                    # Straight Flush
                     if s[0] == s[1] == s[2] == s[3] == s[4]:
                         return 5
                     else:
-                        return 1
+                        return 1 # Straight
+                # Flush
                 if s[0] == s[1] == s[2] == s[3] == s[4]:
                     return 2
+                # Full House
                 elif (
                     (v[0] == v[1]) and (v[3] == v[4]) and (v[2] == v[1] or v[2] == v[3])
                 ):
                     return 3
+                # Four of a Kind
                 elif (v[0] == v[1] == v[2] == v[3]) or (v[1] == v[2] == v[3] == v[4]):
                     return 4
                 else:
@@ -350,10 +354,33 @@ def value_checker(my_cards, last_cards):
                     return 0
                 elif my_cards[0].suit < last_cards[0].suit:
                     return 9
-            if my_cards[4].number > last_cards[4].number:
-                return 0
+            elif rank(my_cards) == 3:  # Full house comparison
+                # For full house, compare the triplet (3-of-a-kind) part
+                def get_triplet_value(cards):
+                    # Count occurrences of each value
+                    value_counts = {}
+                    for card in cards:
+                        value_counts[card.value] = value_counts.get(card.value, 0) + 1
+                    
+                    # Find the value that appears 3 times (the triplet)
+                    for value, count in value_counts.items():
+                        if count == 3:
+                            return value
+                    return -1 
+                
+                my_triplet = get_triplet_value(my_cards)
+                last_triplet = get_triplet_value(last_cards)
+                
+                if my_triplet > last_triplet:
+                    return 0
+                else:
+                    return 10
             else:
-                return 10
+                # For other 5-card hands (straight, flush, four-of-a-kind, straight flush)
+                if my_cards[4].number > last_cards[4].number:
+                    return 0
+                else:
+                    return 10
 
 
 def quantity_checker(my_cards, cards):

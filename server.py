@@ -3,8 +3,7 @@ from datetime import datetime
 import threading
 import json
 import logging
-from game import Player
-from game import deal, who_starts, play
+from game import Player, deal, who_starts, play
 
 class GameSession:  
     def __init__(self, session_id, session_name, creator_name):
