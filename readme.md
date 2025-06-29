@@ -178,6 +178,6 @@ REDIS_PASSWORD = 'your-redis-password'
 
 ## Contributions
 
-1. Azarel Grahandito Adi: pygame, GameStates+HTTP Integration
-2. Steven Gerard Lekatompessy: HTTP protocol, Load balancing (Azure)
-3. Naufal Khairul Rizky: GameStates, Sessions
+1. Azarel Grahandito Adi: pygame, endpoint logic
+2. Steven Gerard Lekatompessy: Deployment, HTTP architecture
+3. Naufal Khairul Rizky: GameSessions attributes, client session requests
