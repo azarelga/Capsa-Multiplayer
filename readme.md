@@ -1,4 +1,6 @@
 # Capsa Multiplayer Game
+<img width="1045" alt="Screenshot 2025-06-29 at 22 00 35" src="https://github.com/user-attachments/assets/6e1b84a1-aa32-4457-8ee7-a38da723d2eb" />
+
 Created by:
 | Nama |NRP    | 
 | :---:   | :---: | 
@@ -6,19 +8,19 @@ Created by:
 | Azarel Grahandito Adi | 5025221126   | 
 | Naufal Khairul Rizky | 5025221127  | 
 
+
 A Big Two (Capsa Banting) card game implementation with multiple network protocols support including TCP and HTTP implementations, featuring both human players and AI opponents. This game is dedicated for our years in Senior High School where we spent most of our time sharing a core memory experience with our friends by playing this card game.
 
 ## Table of Contents
 
 - [Overview](#overview)
-- [Features](#features)
 - [Project Structure](#project-structure)
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Usage](#usage)
-- [Game Rules](#game-rules)
 - [Architecture](#architecture)
 - [Configuration](#configuration)
+- [Our House Rules](#our-house-rules)
 - [Contributions](#contributions)
 
 ## Overview
