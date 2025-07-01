@@ -25,7 +25,7 @@ A Big Two (Capsa Banting) card game implementation with multiple network protoco
 
 ## Overview
 
-This project implements a multiplayer Capsa (Big Two) card game with support for 1-4 players. The game features a modular architecture supporting multiple network protocols (TCP and HTTP) with automatic AI player filling for incomplete sessions. The client includes a pygame-based graphical user interface.
+This project implements a multiplayer Capsa (Big Two) card game with support for 1-4 players. The game features a modular architecture supporting multiplse network protocols (TCP and HTTP) with automatic AI player filling for incomplete sessions. The client includes a pygame-based graphical user interface.
 
 ## Project Structure
 
