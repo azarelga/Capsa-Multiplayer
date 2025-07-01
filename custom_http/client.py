@@ -1,8 +1,10 @@
 import pygame
-import requests
+import socket
 import json
 import time
 import sys
+import logging
+from urllib.parse import urlparse
 from common.game import (
     show_session_menu,
     get_session_name,
@@ -13,56 +15,173 @@ from common.game import (
     draw_game,
 )
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
 
 class ClientInterface:
     def __init__(self, server_address="http://127.0.0.1:8886"):
         self.server_address = server_address
+        self.session_cookies = {}
+
+    def make_socket(self, destination_address="localhost", port=80):
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server_address = (destination_address, port)
+            logging.info(f"Connecting to {server_address}")
+            sock.connect(server_address)
+            return sock
+        except Exception as e:
+            logging.error(f"Socket creation error: {str(e)}")
+            return None
+
+    def send_request(self, host, port, request):
+        sock = self.make_socket(host, port)
+        if not sock:
+            return None
+
+        try:
+            sock.sendall(request)
+            logging.info("HTTP request sent")
+
+            response = b""
+            while True:
+                data = sock.recv(4096)
+                if not data:
+                    break
+                response += data
+                
+                if b"\r\n\r\n" in response:
+                    headers_part = response.split(b"\r\n\r\n")[0]
+                    if b"content-length:" in headers_part.lower():
+                        for line in headers_part.split(b"\r\n"):
+                            if line.lower().startswith(b"content-length:"):
+                                content_length = int(line.split(b":")[1].strip())
+                                body_received = len(response.split(b"\r\n\r\n", 1)[1])
+                                while body_received < content_length:
+                                    more_data = sock.recv(4096)
+                                    if not more_data:
+                                        break
+                                    response += more_data
+                                    body_received = len(response.split(b"\r\n\r\n", 1)[1])
+                                break
+                    break
+
+            sock.close()
+            return response
+
+        except Exception as e:
+            logging.error(f"Request sending error: {str(e)}")
+            return None
 
     def send_command(self, command_str="", data=None, method="GET"):
-        try:
-            if method == "GET":
-                if command_str.startswith("/"):
-                    url = f"{self.server_address}{command_str}"
-                else:
-                    url = f"{self.server_address}/{command_str}"
-                response = requests.get(url)
-            elif method == "POST":
-                if command_str.startswith("/"):
-                    url = f"{self.server_address}{command_str}"
-                else:
-                    url = f"{self.server_address}/{command_str}"
-                response = requests.post(url, json=data or {})
-            
-            if response.status_code in [200, 201]:
-                try:
-                    hasil = response.json()
-                    hasil['status'] = 'OK'
-                    return hasil
-                except:
-                    return {'status': 'OK', 'message': 'Success'}
+        parsed = urlparse(self.server_address)
+        
+        if ':' in parsed.netloc:
+            host = parsed.netloc.split(':')[0]
+            port = int(parsed.netloc.split(':')[1])
+        else:
+            host = parsed.netloc
+            port = 8886
+
+        if method == "GET":
+            if command_str.startswith("/"):
+                path = command_str
             else:
-                try:
-                    error_data = response.json()
-                    error_data['status'] = 'ERROR'
-                    return error_data
-                except:
-                    return {'status': 'ERROR', 'message': f'HTTP {response.status_code}'}
-        except requests.exceptions.ConnectionError:
+                path = f"/{command_str}"
+                
+            request_headers = {
+                "Host": f"{host}:{port}",
+                "User-Agent": "Python-CapsaClient/1.0",
+                "Accept": "application/json",
+                "Connection": "close",
+            }
+
+            request = f"GET {path} HTTP/1.1\r\n"
+            for key, value in request_headers.items():
+                request += f"{key}: {value}\r\n"
+            request += "\r\n"
+            request = request.encode("utf-8")
+
+        elif method == "POST":
+            if command_str.startswith("/"):
+                path = command_str
+            else:
+                path = f"/{command_str}"
+            
+            if data is None:
+                data = ""
+            if isinstance(data, dict):
+                data = json.dumps(data)
+
+            request_headers = {
+                "Host": f"{host}:{port}",
+                "User-Agent": "Python-CapsaClient/1.0",
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "Content-Length": str(len(data)),
+                "Connection": "close",
+            }
+
+            request = f"POST {path} HTTP/1.1\r\n"
+            for key, value in request_headers.items():
+                request += f"{key}: {value}\r\n"
+            request = request.encode()
+            request += "\r\n".encode()
+            if type(data) is not bytes:
+                data = data.encode()
+            request += data
+
+        logging.info(f"{method} request to {self.server_address}{path}")
+        response = self.send_request(host, port, request)
+        
+        if response:
+            response_str = response.decode("utf-8", errors="ignore")
+            
+            if "\r\n\r\n" in response_str:
+                headers, body = response_str.split("\r\n\r\n", 1)
+                
+                status_line = headers.split("\r\n")[0]
+                if "200 OK" in status_line or "201 Created" in status_line:
+                    try:
+                        hasil = json.loads(body) if body.strip() else {}
+                        
+                        if isinstance(hasil, list):
+                            return {'status': 'OK', 'data': hasil}
+                        elif isinstance(hasil, dict):
+                            hasil['status'] = 'OK'
+                            return hasil
+                        else:
+                            return {'status': 'OK', 'data': hasil}
+                            
+                    except json.JSONDecodeError:
+                        return {'status': 'OK', 'message': 'Success'}
+                else:
+                    try:
+                        error_data = json.loads(body) if body.strip() else {}
+                        if isinstance(error_data, dict):
+                            error_data['status'] = 'ERROR'
+                            return error_data
+                        else:
+                            return {'status': 'ERROR', 'data': error_data}
+                    except json.JSONDecodeError:
+                        return {'status': 'ERROR', 'message': status_line}
+            else:
+                return {'status': 'ERROR', 'message': 'Invalid HTTP response'}
+        else:
             return {'status': 'ERROR', 'message': 'Connection error'}
-        except Exception as e:
-            return {'status': 'ERROR', 'message': str(e)}
 
     def get_sessions(self):
         command_str = "sessions"
         hasil = self.send_command(command_str, method="GET")
         if hasil['status'] == 'OK':
-            # Remove status key and return the actual sessions data
-            sessions = [key for key in hasil.keys() if key != 'status']
-            if sessions:
-                return [hasil[key] for key in sessions if isinstance(hasil[key], dict)]
+            if 'data' in hasil:
+                return hasil['data']
             else:
-                # If direct array response
-                return hasil if isinstance(hasil, list) else []
+                sessions = [key for key in hasil.keys() if key != 'status']
+                if sessions:
+                    return [hasil[key] for key in sessions if isinstance(hasil[key], dict)]
+                else:
+                    return []
         return None
 
     def create_session(self, session_name, creator_name):
@@ -70,6 +189,8 @@ class ClientInterface:
         data = {"session_name": session_name, "creator_name": creator_name}
         hasil = self.send_command(command_str, data, method="POST")
         if hasil['status'] == 'OK':
+            if 'data' in hasil:
+                return hasil['data']
             return hasil
         return False
 
@@ -78,6 +199,8 @@ class ClientInterface:
         data = {"player_name": player_name}
         hasil = self.send_command(command_str, data, method="POST")
         if hasil['status'] == 'OK':
+            if 'data' in hasil:
+                return hasil['data']
             return hasil
         return False
 
@@ -92,6 +215,8 @@ class ClientInterface:
         command_str = f"sessions/{session_id}?player_name={player_name}"
         hasil = self.send_command(command_str, method="GET")
         if hasil['status'] == 'OK':
+            if 'data' in hasil:
+                return hasil['data']
             return hasil
         return False
 
@@ -137,13 +262,7 @@ class CapsaClient:
         }
 
     def get_sessions(self):
-        try:
-            response = requests.get(f"{self.server_address}/sessions")
-            if response.status_code == 200:
-                return response.json()
-            return []
-        except requests.exceptions.ConnectionError:
-            return None
+        return self.client_interface.get_sessions()
 
     def create_session(self, session_name, creator_name):
         hasil = self.client_interface.create_session(session_name, creator_name)
@@ -177,7 +296,6 @@ class CapsaClient:
         hasil = self.client_interface.get_game_state(self.session_id, self.player_name)
         if hasil and hasil != False:
             new_game_data = self._get_default_game_data()
-            # Remove status key before updating
             game_state = {k: v for k, v in hasil.items() if k != 'status'}
             new_game_data.update(game_state)
             self.game_data = new_game_data
@@ -196,13 +314,11 @@ class CapsaClient:
             error_msg = hasil.get("error", hasil.get("message", "Invalid move"))
             self.show_message(error_msg, 2)
         else:
-            self.selected_cards = []  # Clear selection after successful play
-            # Check for win notification
+            self.selected_cards = []
             if "winner_notification" in hasil:
                 self.show_message(hasil["winner_notification"], 5)
 
     def pass_turn(self):
-        """Pass turn using ClientInterface - mirip template"""
         if not self.session_id or not self.player_name:
             return
         
@@ -213,9 +329,8 @@ class CapsaClient:
             self.show_message(error_msg, 2)
 
     def show_message(self, text, duration=3):
-        """Show message - mirip template"""
         self.message = text
-        self.message_timer = duration * 60  # duration in seconds, 60 FPS
+        self.message_timer = duration * 60
 
 
 def main():
@@ -276,7 +391,7 @@ def main():
         update_interval = 0.5 if is_game_active else 3.0
 
         if now - last_update_time > update_interval:
-            client.get_game_state()  # Menggunakan ClientInterface
+            client.get_game_state()
             last_update_time = now
 
         if not client.connected:
@@ -310,13 +425,13 @@ def main():
                     if rect.collidepoint(event.pos):
                         if name == "PLAY":
                             if client.selected_cards:
-                                client.play_cards(client.selected_cards)  
+                                client.play_cards(client.selected_cards)
                             else:
                                 client.show_message("Select cards to play", 2)
                         elif name == "PASS":
-                            client.pass_turn()  
+                            client.pass_turn()
                         elif name == "START":
-                            client.start_game()  
+                            client.start_game()
                         break
 
         card_rects, button_rects = draw_game(screen, client, WIDTH, HEIGHT)
