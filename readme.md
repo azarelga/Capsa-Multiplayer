@@ -1,6 +1,6 @@
 # Capsa Multiplayer Game
 <img width="1045" alt="Screenshot 2025-06-29 at 22 00 35" src="https://github.com/user-attachments/assets/6e1b84a1-aa32-4457-8ee7-a38da723d2eb" />
-
+ 
 Created by:
 | Nama |NRP    | 
 | :---:   | :---: | 
